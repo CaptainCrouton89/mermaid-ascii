@@ -13,6 +13,7 @@ import (
 
 type graphProperties struct {
 	data           *orderedmap.OrderedMap[string, []textEdge]
+	nodeSpecs      map[string]graphNodeSpec
 	styleClasses   *map[string]styleClass
 	graphDirection string
 	styleType      string
@@ -24,6 +25,12 @@ type graphProperties struct {
 
 type textNode struct {
 	name       string
+	label      graphLabel
+	styleClass string
+}
+
+type graphNodeSpec struct {
+	label      graphLabel
 	styleClass string
 }
 
@@ -47,9 +54,10 @@ func parseNode(line string) textNode {
 	nodeWithClass, _ := regexp.Compile(`^(.+):::(.+)$`)
 
 	if match := nodeWithClass.FindStringSubmatch(trimmedLine); match != nil {
-		return textNode{strings.TrimSpace(match[1]), strings.TrimSpace(match[2])}
+		name := strings.TrimSpace(match[1])
+		return textNode{name: name, label: newGraphLabel(name), styleClass: strings.TrimSpace(match[2])}
 	} else {
-		return textNode{trimmedLine, ""}
+		return textNode{name: trimmedLine, label: newGraphLabel(trimmedLine)}
 	}
 }
 
@@ -66,27 +74,39 @@ func parseStyleClass(matchedLine []string) styleClass {
 	return styleClass{className, styleMap}
 }
 
-func setArrowWithLabel(lhs, rhs []textNode, label string, data *orderedmap.OrderedMap[string, []textEdge]) []textNode {
+func setArrowWithLabel(lhs, rhs []textNode, label string, gp *graphProperties) []textNode {
 	log.Debug("Setting arrow from ", lhs, " to ", rhs, " with label ", label)
 	for _, l := range lhs {
 		for _, r := range rhs {
-			setData(l, textEdge{l, r, label}, data)
+			setData(l, textEdge{l, r, label}, gp.data, gp.nodeSpecs)
 		}
 	}
 	return rhs
 }
 
-func setArrow(lhs, rhs []textNode, data *orderedmap.OrderedMap[string, []textEdge]) []textNode {
-	return setArrowWithLabel(lhs, rhs, "", data)
+func setArrow(lhs, rhs []textNode, gp *graphProperties) []textNode {
+	return setArrowWithLabel(lhs, rhs, "", gp)
 }
 
-func addNode(node textNode, data *orderedmap.OrderedMap[string, []textEdge]) {
+func rememberNode(node textNode, nodeSpecs map[string]graphNodeSpec) {
+	spec := nodeSpecs[node.name]
+	spec.label = node.label
+	if node.styleClass != "" {
+		spec.styleClass = node.styleClass
+	}
+	nodeSpecs[node.name] = spec
+}
+
+func addNode(node textNode, data *orderedmap.OrderedMap[string, []textEdge], nodeSpecs map[string]graphNodeSpec) {
+	rememberNode(node, nodeSpecs)
 	if _, ok := data.Get(node.name); !ok {
 		data.Set(node.name, []textEdge{})
 	}
 }
 
-func setData(parent textNode, edge textEdge, data *orderedmap.OrderedMap[string, []textEdge]) {
+func setData(parent textNode, edge textEdge, data *orderedmap.OrderedMap[string, []textEdge], nodeSpecs map[string]graphNodeSpec) {
+	rememberNode(parent, nodeSpecs)
+	rememberNode(edge.child, nodeSpecs)
 	// Check if the parent is in the map
 	if children, ok := data.Get(parent.name); ok {
 		// If it is, append the child to the list of children
@@ -129,7 +149,7 @@ func (gp *graphProperties) parseString(line string) ([]textNode, error) {
 				if rhs, err = gp.parseString(match[1]); err != nil {
 					rhs = []textNode{parseNode(match[1])}
 				}
-				return setArrow(lhs, rhs, gp.data), nil
+				return setArrow(lhs, rhs, gp), nil
 			},
 		},
 		{
@@ -141,7 +161,7 @@ func (gp *graphProperties) parseString(line string) ([]textNode, error) {
 				if rhs, err = gp.parseString(match[2]); err != nil {
 					rhs = []textNode{parseNode(match[2])}
 				}
-				return setArrowWithLabel(lhs, rhs, match[1], gp.data), nil
+				return setArrowWithLabel(lhs, rhs, match[1], gp), nil
 			},
 		},
 		{
@@ -213,6 +233,7 @@ func mermaidFileToMap(mermaid, styleType string) (*graphProperties, error) {
 	styleClasses := make(map[string]styleClass)
 	properties := graphProperties{
 		data:           data,
+		nodeSpecs:      make(map[string]graphNodeSpec),
 		styleClasses:   &styleClasses,
 		graphDirection: "",
 		styleType:      styleType,
@@ -312,11 +333,11 @@ func mermaidFileToMap(mermaid, styleType string) (*graphProperties, error) {
 		if err != nil {
 			log.Debugf("Parsing remaining text to node %v", line)
 			node := parseNode(line)
-			addNode(node, properties.data)
+			addNode(node, properties.data, properties.nodeSpecs)
 		} else {
 			// Ensure all returned nodes are in the map
 			for _, node := range nodes {
-				addNode(node, properties.data)
+				addNode(node, properties.data, properties.nodeSpecs)
 			}
 		}
 

@@ -6,6 +6,7 @@ import (
 
 type node struct {
 	name           string
+	label          graphLabel
 	drawing        *drawing
 	drawingCoord   *drawingCoord
 	gridCoord      *gridCoord

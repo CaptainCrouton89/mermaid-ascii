@@ -151,7 +151,7 @@ func (g *graph) drawLine(d *drawing, from drawingCoord, to drawingCoord, offsetF
 }
 
 func drawMap(properties *graphProperties) string {
-	g := mkGraph(properties.data)
+	g := mkGraph(properties.data, properties.nodeSpecs)
 	g.setStyleClasses(properties)
 	g.paddingX = properties.paddingX
 	g.paddingY = properties.paddingY

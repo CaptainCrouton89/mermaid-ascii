@@ -58,7 +58,7 @@ type subgraph struct {
 	maxY int
 }
 
-func mkGraph(data *orderedmap.OrderedMap[string, []textEdge]) graph {
+func mkGraph(data *orderedmap.OrderedMap[string, []textEdge], nodeSpecs map[string]graphNodeSpec) graph {
 	g := graph{drawing: mkDrawing(0, 0)}
 	g.grid = make(map[gridCoord]*node)
 	g.columnWidth = make(map[int]int)
@@ -68,18 +68,19 @@ func mkGraph(data *orderedmap.OrderedMap[string, []textEdge]) graph {
 	for el := data.Front(); el != nil; el = el.Next() {
 		nodeName := el.Key
 		children := el.Value
+		spec := nodeSpecs[nodeName]
 		// Get or create parent node
 		parentNode, err := g.getNode(nodeName)
 		if err != nil {
-			parentNode = &node{name: nodeName, index: index, styleClassName: ""}
+			parentNode = &node{name: nodeName, label: spec.label, index: index, styleClassName: spec.styleClass}
 			g.appendNode(parentNode)
 			index += 1
 		}
 		for _, textEdge := range children {
+			childSpec := nodeSpecs[textEdge.child.name]
 			childNode, err := g.getNode(textEdge.child.name)
 			if err != nil {
-				childNode = &node{name: textEdge.child.name, index: index, styleClassName: textEdge.child.styleClass}
-				parentNode.styleClassName = textEdge.parent.styleClass
+				childNode = &node{name: textEdge.child.name, label: childSpec.label, index: index, styleClassName: childSpec.styleClass}
 				g.appendNode(childNode)
 				index += 1
 			}
