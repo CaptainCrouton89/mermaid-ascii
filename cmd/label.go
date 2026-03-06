@@ -9,6 +9,8 @@ import (
 
 var htmlBreakPattern = regexp.MustCompile(`(?i)<br\s*/?>`)
 
+const graphLabelLineGap = 1
+
 type graphLabel struct {
 	lines []string
 	width int
@@ -36,4 +38,11 @@ func newGraphLabel(raw string) graphLabel {
 
 func (l graphLabel) height() int {
 	return len(l.lines)
+}
+
+func (l graphLabel) contentHeight() int {
+	if len(l.lines) == 0 {
+		return 0
+	}
+	return len(l.lines) + (len(l.lines)-1)*graphLabelLineGap
 }

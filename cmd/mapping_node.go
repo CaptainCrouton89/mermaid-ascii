@@ -37,10 +37,10 @@ func (g *graph) setColumnWidth(n *node) {
 	// - 2x padding
 	// - 2x margin
 	col1 := 1
-	col2 := 2*g.boxBorderPadding + len(n.name)
+	col2 := 2*g.boxBorderPadding + n.label.width
 	col3 := 1
 	colsToBePlaced := []int{col1, col2, col3}
-	rowsToBePlaced := []int{1, 1 + 2*g.boxBorderPadding, 1} // Border, padding + line, border
+	rowsToBePlaced := []int{1, n.label.contentHeight() + 2*g.boxBorderPadding, 1} // Border, padding + content, border
 
 	for idx, col := range colsToBePlaced {
 		// Set new width for column if the size increased

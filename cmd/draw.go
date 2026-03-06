@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gookit/color"
+	"github.com/mattn/go-runewidth"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -227,11 +228,18 @@ func drawBox(n *node, g graph) *drawing {
 		boxDrawing[from.x][to.y] = "+"   // Bottom left corner
 		boxDrawing[to.x][to.y] = "+"     // Bottom right corner
 	}
-	// Draw text
-	textY := from.y + h/2
-	textX := from.x + w/2 - CeilDiv(len(n.name), 2) + 1
-	for x := 0; x < len(n.name); x++ {
-		boxDrawing[textX+x][textY] = wrapTextInColor(string(n.name[x]), n.styleClass.styles["color"], g.styleType)
+	// Draw label lines inside the padded content area.
+	innerTop := from.y + 1
+	innerHeight := h - 1
+	contentTop := innerTop + (innerHeight-n.label.contentHeight())/2
+	for lineIdx, line := range n.label.lines {
+		textY := contentTop + lineIdx*(graphLabelLineGap+1)
+		textWidth := runewidth.StringWidth(line)
+		textX := from.x + w/2 - CeilDiv(textWidth, 2) + 1
+		for _, r := range line {
+			boxDrawing[textX][textY] = wrapTextInColor(string(r), n.styleClass.styles["color"], g.styleType)
+			textX++
+		}
 	}
 
 	return &boxDrawing
