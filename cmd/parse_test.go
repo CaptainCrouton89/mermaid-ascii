@@ -50,3 +50,65 @@ func TestMermaidFileToMapPreservesEscapedLabelNewlines(t *testing.T) {
 		t.Fatalf("label lines = %#v, want [line1 line2]", spec.label.lines)
 	}
 }
+
+func TestParseSubgraphHeader(t *testing.T) {
+	tests := []struct {
+		name      string
+		header    string
+		wantID    string
+		wantLabel string
+	}{
+		{
+			name:      "plain title",
+			header:    "Frontend",
+			wantID:    "",
+			wantLabel: "Frontend",
+		},
+		{
+			name:      "explicit id and title",
+			header:    "frontend [Frontend Services]",
+			wantID:    "frontend",
+			wantLabel: "Frontend Services",
+		},
+		{
+			name:      "quoted title",
+			header:    `frontend["Frontend Services"]`,
+			wantID:    "frontend",
+			wantLabel: "Frontend Services",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sg := parseSubgraphHeader(tt.header)
+			if sg.id != tt.wantID {
+				t.Fatalf("id = %q, want %q", sg.id, tt.wantID)
+			}
+			if sg.name != tt.wantLabel {
+				t.Fatalf("name = %q, want %q", sg.name, tt.wantLabel)
+			}
+			if len(sg.label.lines) != 1 || sg.label.lines[0] != tt.wantLabel {
+				t.Fatalf("label lines = %#v, want [%s]", sg.label.lines, tt.wantLabel)
+			}
+		})
+	}
+}
+
+func TestMermaidFileToMapParsesSubgraphIDAndTitle(t *testing.T) {
+	properties, err := mermaidFileToMap("graph LR\nsubgraph frontend [Frontend Services]\nA --> B\nend", "cli")
+	if err != nil {
+		t.Fatalf("mermaidFileToMap() error = %v", err)
+	}
+
+	if len(properties.subgraphs) != 1 {
+		t.Fatalf("subgraphs = %d, want 1", len(properties.subgraphs))
+	}
+
+	sg := properties.subgraphs[0]
+	if sg.id != "frontend" {
+		t.Fatalf("id = %q, want %q", sg.id, "frontend")
+	}
+	if sg.name != "Frontend Services" {
+		t.Fatalf("name = %q, want %q", sg.name, "Frontend Services")
+	}
+}

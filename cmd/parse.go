@@ -42,10 +42,31 @@ type textEdge struct {
 }
 
 type textSubgraph struct {
+	id       string
 	name     string
+	label    graphLabel
 	nodes    []string
 	parent   *textSubgraph
 	children []*textSubgraph
+}
+
+func parseSubgraphHeader(header string) textSubgraph {
+	trimmed := strings.TrimSpace(header)
+	labelText := trimmed
+	id := ""
+
+	if match := regexp.MustCompile(`^(\S+)\s*\[(.+)\]$`).FindStringSubmatch(trimmed); match != nil {
+		id = strings.TrimSpace(match[1])
+		labelText = strings.TrimSpace(match[2])
+		labelText = strings.Trim(labelText, `"`)
+	}
+
+	return textSubgraph{
+		id:    id,
+		name:  labelText,
+		label: newGraphLabel(labelText),
+		nodes: []string{},
+	}
 }
 
 func splitGraphLines(mermaid string) []string {
@@ -335,9 +356,11 @@ func mermaidFileToMap(mermaid, styleType string) (*graphProperties, error) {
 
 		// Check for subgraph start
 		if match := subgraphRegex.FindStringSubmatch(trimmedLine); match != nil {
-			subgraphName := strings.TrimSpace(match[1])
+			header := parseSubgraphHeader(match[1])
 			newSubgraph := &textSubgraph{
-				name:     subgraphName,
+				id:       header.id,
+				name:     header.name,
+				label:    header.label,
 				nodes:    []string{},
 				children: []*textSubgraph{},
 			}
@@ -351,7 +374,7 @@ func mermaidFileToMap(mermaid, styleType string) (*graphProperties, error) {
 
 			subgraphStack = append(subgraphStack, newSubgraph)
 			properties.subgraphs = append(properties.subgraphs, newSubgraph)
-			log.Debugf("Started subgraph %s", subgraphName)
+			log.Debugf("Started subgraph %s", newSubgraph.name)
 			continue
 		}
 
