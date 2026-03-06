@@ -34,6 +34,7 @@ type graph struct {
 	edges        []*edge
 	drawing      *drawing
 	grid         map[gridCoord]*node
+	edgeCounts   map[edgePair]int
 	columnWidth  map[int]int
 	rowHeight    map[int]int
 	styleClasses map[string]styleClass
@@ -46,6 +47,11 @@ type graph struct {
 	offsetX      int
 	offsetY      int
 	useAscii     bool
+}
+
+type edgePair struct {
+	from int
+	to   int
 }
 
 type subgraph struct {
@@ -64,6 +70,7 @@ type subgraph struct {
 func mkGraph(data *orderedmap.OrderedMap[string, []textEdge], nodeSpecs map[string]graphNodeSpec) graph {
 	g := graph{drawing: mkDrawing(0, 0)}
 	g.grid = make(map[gridCoord]*node)
+	g.edgeCounts = make(map[edgePair]int)
 	g.columnWidth = make(map[int]int)
 	g.rowHeight = make(map[int]int)
 	g.styleClasses = make(map[string]styleClass)

@@ -73,6 +73,35 @@ func TestRenderGraphSupportsLiteralNewlineInNodeLabel(t *testing.T) {
 	}
 }
 
+func TestRenderGraphSeparatesDuplicateEdgeLabels(t *testing.T) {
+	config := diagram.NewTestConfig(true, "cli")
+	output, err := RenderDiagram("graph LR\nA -->|miss| B\nA -->|hit| B", config)
+	if err != nil {
+		t.Fatalf("RenderDiagram() error = %v", err)
+	}
+
+	if strings.Contains(output, "mhit") {
+		t.Fatalf("expected duplicate edge labels not to merge\noutput:\n%s", output)
+	}
+	if !strings.Contains(output, "miss") || !strings.Contains(output, "hit") {
+		t.Fatalf("expected output to contain both duplicate edge labels\noutput:\n%s", output)
+	}
+
+	missLine := -1
+	hitLine := -1
+	for i, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "miss") {
+			missLine = i
+		}
+		if strings.Contains(line, "hit") {
+			hitLine = i
+		}
+	}
+	if missLine == -1 || hitLine == -1 || missLine == hitLine {
+		t.Fatalf("expected duplicate edge labels on separate lines\noutput:\n%s", output)
+	}
+}
+
 func assertUniformDisplayWidth(t *testing.T, output string) {
 	t.Helper()
 
