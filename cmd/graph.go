@@ -50,6 +50,7 @@ type graph struct {
 
 type subgraph struct {
 	name     string
+	label    graphLabel
 	nodes    []*node
 	parent   *subgraph
 	children []*subgraph
@@ -116,6 +117,7 @@ func (g *graph) setSubgraphs(textSubgraphs []*textSubgraph) {
 	for _, tsg := range textSubgraphs {
 		sg := &subgraph{
 			name:     tsg.name,
+			label:    tsg.label,
 			nodes:    []*node{},
 			children: []*subgraph{},
 		}
@@ -476,9 +478,18 @@ func (g *graph) calculateSubgraphBoundingBox(sg *subgraph) {
 		maxY = Max(maxY, nodeMaxY)
 	}
 
+	// Ensure the title fits inside the frame after padding is applied.
+	currentWidth := maxX - minX
+	currentInnerWidth := currentWidth + 3
+	if currentInnerWidth < sg.label.width {
+		extraWidth := sg.label.width - currentInnerWidth
+		minX -= extraWidth / 2
+		maxX += extraWidth - (extraWidth / 2)
+	}
+
 	// Add padding (allow negative coordinates, we'll offset later)
 	const subgraphPadding = 2
-	const subgraphLabelSpace = 2 // Extra space for label at top
+	subgraphLabelSpace := sg.label.contentHeight() + 1
 	sg.minX = minX - subgraphPadding
 	sg.minY = minY - subgraphPadding - subgraphLabelSpace
 	sg.maxX = maxX + subgraphPadding

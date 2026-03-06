@@ -324,15 +324,18 @@ func drawSubgraphLabel(sg *subgraph, g graph) (*drawing, drawingCoord) {
 	to := drawingCoord{width, height}
 	labelDrawing := *(mkDrawing(width, height))
 
-	// Draw label centered at top
-	labelY := from.y + 1
-	labelX := from.x + width/2 - len(sg.name)/2
-	if labelX < from.x+1 {
-		labelX = from.x + 1
-	}
-	for i, char := range sg.name {
-		if labelX+i < to.x {
-			labelDrawing[labelX+i][labelY] = string(char)
+	// Draw label centered at top.
+	for lineIdx, line := range sg.label.lines {
+		labelY := from.y + 1 + lineIdx*(graphLabelLineGap+1)
+		labelX := from.x + width/2 - runewidth.StringWidth(line)/2
+		if labelX < from.x+1 {
+			labelX = from.x + 1
+		}
+		for _, char := range line {
+			if labelX < to.x {
+				labelDrawing[labelX][labelY] = string(char)
+			}
+			labelX++
 		}
 	}
 
