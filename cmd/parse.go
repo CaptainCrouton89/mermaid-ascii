@@ -47,18 +47,61 @@ type textSubgraph struct {
 	children []*textSubgraph
 }
 
+func splitGraphLines(mermaid string) []string {
+	lines := []string{}
+	var current strings.Builder
+	bracketDepth := 0
+	inQuotes := false
+
+	for i := 0; i < len(mermaid); i++ {
+		switch mermaid[i] {
+		case '"':
+			inQuotes = !inQuotes
+		case '[':
+			if !inQuotes {
+				bracketDepth++
+			}
+		case ']':
+			if !inQuotes && bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '\n':
+			lines = append(lines, current.String())
+			current.Reset()
+			continue
+		case '\\':
+			if i+1 < len(mermaid) && mermaid[i+1] == 'n' && bracketDepth == 0 {
+				lines = append(lines, current.String())
+				current.Reset()
+				i++
+				continue
+			}
+		}
+
+		current.WriteByte(mermaid[i])
+	}
+
+	return append(lines, current.String())
+}
+
 func parseNode(line string) textNode {
 	// Trim any whitespace from the line that might be left after comment removal
 	trimmedLine := strings.TrimSpace(line)
-
-	nodeWithClass, _ := regexp.Compile(`^(.+):::(.+)$`)
-
-	if match := nodeWithClass.FindStringSubmatch(trimmedLine); match != nil {
-		name := strings.TrimSpace(match[1])
-		return textNode{name: name, label: newGraphLabel(name), styleClass: strings.TrimSpace(match[2])}
-	} else {
-		return textNode{name: trimmedLine, label: newGraphLabel(trimmedLine)}
+	styleClass := ""
+	if idx := strings.LastIndex(trimmedLine, ":::"); idx != -1 {
+		styleClass = strings.TrimSpace(trimmedLine[idx+3:])
+		trimmedLine = strings.TrimSpace(trimmedLine[:idx])
 	}
+
+	name := trimmedLine
+	labelText := trimmedLine
+	if open := strings.Index(trimmedLine, "["); open > 0 && strings.HasSuffix(trimmedLine, "]") {
+		name = strings.TrimSpace(trimmedLine[:open])
+		labelText = strings.TrimSpace(trimmedLine[open+1 : len(trimmedLine)-1])
+		labelText = strings.Trim(labelText, `"`)
+	}
+
+	return textNode{name: name, label: newGraphLabel(labelText), styleClass: styleClass}
 }
 
 func parseStyleClass(matchedLine []string) styleClass {
@@ -201,9 +244,7 @@ func (gp *graphProperties) parseString(line string) ([]textNode, error) {
 }
 
 func mermaidFileToMap(mermaid, styleType string) (*graphProperties, error) {
-	// Allow split on both \n and the actual string "\n" for curl compatibility
-	newlinePattern := regexp.MustCompile(`\n|\\n`)
-	rawLines := newlinePattern.Split(string(mermaid), -1)
+	rawLines := splitGraphLines(mermaid)
 
 	// Process lines to remove comments
 	lines := []string{}
