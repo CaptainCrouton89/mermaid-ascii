@@ -7,6 +7,52 @@ import (
 	"github.com/mattn/go-runewidth"
 )
 
+func (l graphLabel) withWrapWidth(width int) graphLabel {
+	if width <= 0 {
+		return l
+	}
+	var wrapped []string
+	for _, line := range l.lines {
+		if runewidth.StringWidth(line) <= width {
+			wrapped = append(wrapped, line)
+			continue
+		}
+		// Simple word-wrap
+		words := strings.Fields(line)
+		current := ""
+		currentWidth := 0
+		for _, word := range words {
+			wordWidth := runewidth.StringWidth(word)
+			if current == "" {
+				current = word
+				currentWidth = wordWidth
+				continue
+			}
+			if currentWidth+1+wordWidth <= width {
+				current += " " + word
+				currentWidth += 1 + wordWidth
+			} else {
+				wrapped = append(wrapped, current)
+				current = word
+				currentWidth = wordWidth
+			}
+		}
+		if current != "" {
+			wrapped = append(wrapped, current)
+		}
+	}
+	if len(wrapped) == 0 {
+		wrapped = []string{""}
+	}
+	maxW := 0
+	for _, line := range wrapped {
+		if w := runewidth.StringWidth(line); w > maxW {
+			maxW = w
+		}
+	}
+	return graphLabel{lines: wrapped, width: maxW}
+}
+
 var htmlBreakPattern = regexp.MustCompile(`(?i)<br\s*/?>`)
 
 const graphLabelLineGap = 1

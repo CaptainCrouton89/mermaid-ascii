@@ -38,15 +38,18 @@ type graph struct {
 	columnWidth  map[int]int
 	rowHeight    map[int]int
 	styleClasses map[string]styleClass
-	styleType    string
-	boxBorderPadding int
-	graphDirection   string
-	paddingX     int
-	paddingY     int
-	subgraphs    []*subgraph
-	offsetX      int
-	offsetY      int
-	useAscii     bool
+	styleType         string
+	boxBorderPadding  int
+	graphDirection    string
+	paddingX          int
+	paddingY          int
+	subgraphs         []*subgraph
+	offsetX           int
+	offsetY           int
+	useAscii          bool
+	labelWrapWidth    int
+	edgeLabelPolicy   string
+	edgeLabelMaxWidth int
 }
 
 type edgePair struct {

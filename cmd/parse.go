@@ -12,16 +12,19 @@ import (
 )
 
 type graphProperties struct {
-	data           *orderedmap.OrderedMap[string, []textEdge]
-	nodeSpecs      map[string]graphNodeSpec
-	styleClasses   *map[string]styleClass
-	boxBorderPadding int
-	graphDirection string
-	styleType      string
-	paddingX       int
-	paddingY       int
-	subgraphs      []*textSubgraph
-	useAscii       bool
+	data              *orderedmap.OrderedMap[string, []textEdge]
+	nodeSpecs         map[string]graphNodeSpec
+	styleClasses      *map[string]styleClass
+	boxBorderPadding  int
+	graphDirection    string
+	styleType         string
+	paddingX          int
+	paddingY          int
+	subgraphs         []*textSubgraph
+	useAscii          bool
+	labelWrapWidth    int
+	edgeLabelPolicy   string
+	edgeLabelMaxWidth int
 }
 
 type textNode struct {

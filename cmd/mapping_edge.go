@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -107,6 +108,7 @@ func (g *graph) parallelDirections(e *edge, duplicateIndex int) (direction, dire
 }
 
 func (g *graph) determineLabelLine(e *edge) {
+	e.text = g.applyEdgeLabelPolicy(e.text)
 	// What line on the path should the label be placed?
 	lenLabel := len(e.text)
 	if lenLabel == 0 {
@@ -151,4 +153,32 @@ func (g graph) calculateLineWidth(line []gridCoord) int {
 		totalSize += g.columnWidth[c.x]
 	}
 	return totalSize
+}
+
+func (g *graph) applyEdgeLabelPolicy(label string) string {
+	if label == "" {
+		return ""
+	}
+	switch g.edgeLabelPolicy {
+	case "", diagram.EdgeLabelPolicyFull:
+		return label
+	case diagram.EdgeLabelPolicyDrop:
+		return ""
+	case diagram.EdgeLabelPolicyEllipsis:
+		return g.ellipsisLabel(label)
+	default:
+		return label
+	}
+}
+
+func (g *graph) ellipsisLabel(label string) string {
+	maxWidth := g.edgeLabelMaxWidth
+	if maxWidth <= 0 || len(label) <= maxWidth {
+		return label
+	}
+	ellipsis := "..."
+	if len(ellipsis) >= maxWidth {
+		return ellipsis[:maxWidth]
+	}
+	return label[:maxWidth-len(ellipsis)] + ellipsis
 }

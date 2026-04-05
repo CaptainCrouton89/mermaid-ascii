@@ -157,7 +157,15 @@ func drawMap(properties *graphProperties) string {
 	g.paddingX = properties.paddingX
 	g.paddingY = properties.paddingY
 	g.useAscii = properties.useAscii
+	g.labelWrapWidth = properties.labelWrapWidth
+	g.edgeLabelPolicy = properties.edgeLabelPolicy
+	g.edgeLabelMaxWidth = properties.edgeLabelMaxWidth
 	g.setSubgraphs(properties.subgraphs)
+	if g.labelWrapWidth > 0 {
+		for _, n := range g.nodes {
+			n.label = n.label.withWrapWidth(g.labelWrapWidth)
+		}
+	}
 	g.createMapping()
 	d := g.draw()
 	if Coords {
