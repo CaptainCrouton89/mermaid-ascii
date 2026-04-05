@@ -1,0 +1,24 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "mermaid-ascii"
+version = "2.0.0"
+description = "Render Mermaid diagrams as ASCII art"
+license = "MIT"
+packages = [{include = "mermaid_ascii", from = "src"}]
+include = [
+    {path = "src/mermaid_ascii/mermaid-ascii", format = ["sdist", "wheel"]},
+    {path = "scripts/", format = "sdist"},
+]
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+
+[tool.poetry.scripts]
+mermaid-ascii = "mermaid_ascii:mermaid_ascii"
+
+[tool.poetry.build]
+script = "scripts/binary.py"
+generate-setup-file = false
