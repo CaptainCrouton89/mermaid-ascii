@@ -31,19 +31,32 @@ func fitGraphToWidth(properties *graphProperties, config *diagram.Config) string
 	plans := graphFitPlans(basePlan, config.MaxWidth)
 	bestOutput := ""
 	bestWidth := 0
+	// Track best non-lossy result (preserves edge labels)
+	bestLosslessOutput := ""
+	bestLosslessWidth := 0
 	for idx, plan := range plans {
 		candidate := applyGraphFitPlan(properties, plan)
 		output := drawMap(candidate)
 		width := maxOutputLineWidth(output)
+		lossy := plan.edgeLabelPolicy == diagram.EdgeLabelPolicyDrop ||
+			plan.edgeLabelPolicy == diagram.EdgeLabelPolicyEllipsis
 		if idx == 0 || width < bestWidth {
 			bestWidth = width
 			bestOutput = output
+		}
+		if !lossy && (bestLosslessOutput == "" || width < bestLosslessWidth) {
+			bestLosslessWidth = width
+			bestLosslessOutput = output
 		}
 		if width <= config.MaxWidth {
 			return output
 		}
 	}
 
+	// Prefer lossless result unless lossy is meaningfully narrower
+	if bestLosslessOutput != "" && (bestLosslessWidth <= bestWidth+10) {
+		return bestLosslessOutput
+	}
 	return bestOutput
 }
 
