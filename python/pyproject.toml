@@ -3,7 +3,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "mermaid-ascii"
+name = "mermaid-ascii-termrender"
 version = "2.0.0"
 description = "Render Mermaid diagrams as ASCII art"
 license = "MIT"
