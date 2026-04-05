@@ -15,3 +15,6 @@ mermaid-ascii
 *.tar.gz
 *.tar.zst
 result
+
+# Sisyphus
+.sisyphus

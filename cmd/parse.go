@@ -25,6 +25,7 @@ type graphProperties struct {
 	labelWrapWidth    int
 	edgeLabelPolicy   string
 	edgeLabelMaxWidth int
+	maxNodesPerLevel  int
 }
 
 type textNode struct {

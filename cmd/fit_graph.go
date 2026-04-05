@@ -15,12 +15,13 @@ type graphFitPlan struct {
 	labelWrapWidth    int
 	edgeLabelPolicy   string
 	edgeLabelMaxWidth int
+	maxNodesPerLevel  int
 }
 
 func fitGraphToWidth(properties *graphProperties, config *diagram.Config) string {
 	basePlan := graphFitPlan{
 		paddingX:          properties.paddingX,
-		paddingY:          properties.paddingY,
+		paddingY:          Min(properties.paddingY, 3),
 		boxBorderPadding:  properties.boxBorderPadding,
 		graphDirection:    properties.graphDirection,
 		labelWrapWidth:    properties.labelWrapWidth,
@@ -69,6 +70,7 @@ func applyGraphFitPlan(base *graphProperties, plan graphFitPlan) *graphPropertie
 	candidate.labelWrapWidth = plan.labelWrapWidth
 	candidate.edgeLabelPolicy = plan.edgeLabelPolicy
 	candidate.edgeLabelMaxWidth = plan.edgeLabelMaxWidth
+	candidate.maxNodesPerLevel = plan.maxNodesPerLevel
 	return &candidate
 }
 
@@ -88,13 +90,13 @@ func graphFitPlans(base graphFitPlan, maxWidth int) []graphFitPlan {
 
 	compact := base
 	compact.paddingX = Min(base.paddingX, 2)
-	compact.paddingY = Min(base.paddingY, 1)
+	compact.paddingY = Min(base.paddingY, 3)
 	compact.boxBorderPadding = Min(base.boxBorderPadding, 1)
 	addPlan(compact)
 
 	tight := compact
 	tight.paddingX = Min(tight.paddingX, 1)
-	tight.paddingY = Min(tight.paddingY, 1)
+	tight.paddingY = Min(tight.paddingY, 3)
 	tight.boxBorderPadding = 0
 	addPlan(tight)
 
@@ -126,6 +128,27 @@ func graphFitPlans(base graphFitPlan, maxWidth int) []graphFitPlan {
 		addPlan(flippedCompact)
 	}
 
+	// Reflow: limit nodes per level to force wrapping.
+	// Reflow needs enough horizontal padding for edge routing columns
+	// between side-by-side nodes — without it edges cut through labels.
+	for _, limit := range []int{4, 3, 2} {
+		reflow := compact
+		reflow.maxNodesPerLevel = limit
+		reflow.paddingX = Max(compact.paddingX, 5)
+		addPlan(reflow)
+
+		reflowTight := compact
+		reflowTight.maxNodesPerLevel = limit
+		reflowTight.paddingX = Max(compact.paddingX, 3)
+		reflowTight.boxBorderPadding = 0
+		addPlan(reflowTight)
+
+		reflowWrap := wrapCompact
+		reflowWrap.maxNodesPerLevel = limit
+		reflowWrap.paddingX = Max(wrapCompact.paddingX, 5)
+		addPlan(reflowWrap)
+	}
+
 	ellipsis := wrapCompact
 	ellipsis.edgeLabelPolicy = diagram.EdgeLabelPolicyEllipsis
 	ellipsis.edgeLabelMaxWidth = edgeLabelMaxWidthFor(maxWidth)
@@ -139,7 +162,7 @@ func graphFitPlans(base graphFitPlan, maxWidth int) []graphFitPlan {
 }
 
 func graphFitPlanKey(plan graphFitPlan) string {
-	return fmt.Sprintf("%d:%d:%d:%s:%d:%s:%d",
+	return fmt.Sprintf("%d:%d:%d:%s:%d:%s:%d:%d",
 		plan.paddingX,
 		plan.paddingY,
 		plan.boxBorderPadding,
@@ -147,6 +170,7 @@ func graphFitPlanKey(plan graphFitPlan) string {
 		plan.labelWrapWidth,
 		plan.edgeLabelPolicy,
 		plan.edgeLabelMaxWidth,
+		plan.maxNodesPerLevel,
 	)
 }
 

@@ -50,6 +50,7 @@ type graph struct {
 	labelWrapWidth    int
 	edgeLabelPolicy   string
 	edgeLabelMaxWidth int
+	maxNodesPerLevel  int
 }
 
 type edgePair struct {
@@ -235,6 +236,8 @@ func (g *graph) createMapping() {
 		externalRootNodes = rootNodes
 	}
 
+	nodesAtLevel := make(map[int]int)
+
 	// Place external root nodes first at level 0
 	for _, n := range externalRootNodes {
 		var mappingCoord *gridCoord
@@ -246,6 +249,7 @@ func (g *graph) createMapping() {
 		log.Debugf("Setting mapping coord for external rootnode %s to %v", n.name, mappingCoord)
 		g.nodes[n.index].gridCoord = mappingCoord
 		highestPositionPerLevel[0] = highestPositionPerLevel[0] + 4
+		nodesAtLevel[0]++
 	}
 
 	// Place subgraph root nodes at level 4 (one level to the right/down of external nodes)
@@ -262,6 +266,7 @@ func (g *graph) createMapping() {
 			log.Debugf("Setting mapping coord for subgraph rootnode %s to %v", n.name, mappingCoord)
 			g.nodes[n.index].gridCoord = mappingCoord
 			highestPositionPerLevel[subgraphLevel] = highestPositionPerLevel[subgraphLevel] + 4
+			nodesAtLevel[subgraphLevel]++
 		}
 	}
 
@@ -274,12 +279,19 @@ func (g *graph) createMapping() {
 		} else {
 			childLevel = n.gridCoord.y + 4
 		}
-		highestPosition := highestPositionPerLevel[childLevel]
 		for _, child := range g.getChildren(n) {
 			// Skip if the child already has a mapping coord
 			if child.gridCoord != nil {
 				continue
 			}
+
+			// Reflow: if max nodes per level is set and we've hit the limit,
+			// advance to the next depth level
+			if g.maxNodesPerLevel > 0 && nodesAtLevel[childLevel] >= g.maxNodesPerLevel {
+				childLevel += 4
+			}
+
+			highestPosition := highestPositionPerLevel[childLevel]
 
 			var mappingCoord *gridCoord
 			if g.graphDirection == "LR" {
@@ -290,6 +302,7 @@ func (g *graph) createMapping() {
 			log.Debugf("Setting mapping coord for child %s of parent %s to %v", child.name, n.name, mappingCoord)
 			g.nodes[child.index].gridCoord = mappingCoord
 			highestPositionPerLevel[childLevel] = highestPosition + 4
+			nodesAtLevel[childLevel]++
 		}
 	}
 
