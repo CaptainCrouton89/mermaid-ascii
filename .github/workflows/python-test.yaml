@@ -1,0 +1,34 @@
+name: Python wheel test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-wheel:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: pip install build poetry-core
+
+      - name: Build wheel
+        run: cd python && python -m build --wheel
+
+      - name: Install wheel
+        run: pip install python/dist/*.whl
+
+      - name: Smoke test
+        run: printf 'graph LR\n    A --> B\n' | mermaid-ascii

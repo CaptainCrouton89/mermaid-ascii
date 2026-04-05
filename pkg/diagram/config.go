@@ -32,6 +32,21 @@ type Config struct {
 	// This controls whether graphs use colored output (html) or plain text (cli)
 	StyleType string
 
+	// MaxWidth constrains output width in characters. Zero disables fitting.
+	MaxWidth int
+
+	// FitPolicy controls how the renderer fits diagrams to MaxWidth.
+	FitPolicy string
+
+	// LabelWrapWidth wraps graph node labels to this width. Zero disables wrapping.
+	LabelWrapWidth int
+
+	// EdgeLabelPolicy controls how graph edge labels are handled ("full", "ellipsis", "drop").
+	EdgeLabelPolicy string
+
+	// EdgeLabelMaxWidth is the maximum width for edge labels when using ellipsis policy.
+	EdgeLabelMaxWidth int
+
 	// --- Sequence diagram-specific configuration ---
 
 	// SequenceParticipantSpacing is the horizontal space between participants
@@ -55,8 +70,13 @@ func DefaultConfig() *Config {
 		BoxBorderPadding: 1,
 		PaddingBetweenX:  5,
 		PaddingBetweenY:  5,
-		GraphDirection:   "LR",
-		StyleType:        "cli",
+		GraphDirection:    "LR",
+		StyleType:         "cli",
+		LabelWrapWidth:    0,
+		EdgeLabelPolicy:   EdgeLabelPolicyFull,
+		EdgeLabelMaxWidth: 0,
+		MaxWidth:          0,
+		FitPolicy:         FitPolicyNone,
 		// Sequence diagram defaults
 		SequenceParticipantSpacing: 5,
 		SequenceMessageSpacing:     1,
@@ -89,7 +109,7 @@ func NewConfig(useAscii bool, graphDirection, styleType string) (*Config, error)
 	return config, nil
 }
 
-func NewCLIConfig(useAscii, showCoords, verbose bool, boxBorderPadding, paddingX, paddingY int, graphDirection string) (*Config, error) {
+func NewCLIConfig(useAscii, showCoords, verbose bool, boxBorderPadding, paddingX, paddingY, maxWidth int, graphDirection string) (*Config, error) {
 	defaults := DefaultConfig()
 	config := &Config{
 		UseAscii:                   useAscii,
@@ -100,6 +120,11 @@ func NewCLIConfig(useAscii, showCoords, verbose bool, boxBorderPadding, paddingX
 		PaddingBetweenY:            paddingY,
 		GraphDirection:             graphDirection,
 		StyleType:                  "cli",
+		MaxWidth:                   maxWidth,
+		LabelWrapWidth:             defaults.LabelWrapWidth,
+		EdgeLabelPolicy:            defaults.EdgeLabelPolicy,
+		EdgeLabelMaxWidth:          defaults.EdgeLabelMaxWidth,
+		FitPolicy:                  defaults.FitPolicy,
 		SequenceParticipantSpacing: defaults.SequenceParticipantSpacing,
 		SequenceMessageSpacing:     defaults.SequenceMessageSpacing,
 		SequenceSelfMessageWidth:   defaults.SequenceSelfMessageWidth,
@@ -157,11 +182,29 @@ func (c *Config) Validate() error {
 	if c.PaddingBetweenY < 0 {
 		return &ConfigError{Field: "PaddingBetweenY", Value: c.PaddingBetweenY, Message: "must be non-negative"}
 	}
-	if c.GraphDirection != "LR" && c.GraphDirection != "TD" {
+	if c.GraphDirection != "" && c.GraphDirection != "LR" && c.GraphDirection != "TD" {
 		return &ConfigError{Field: "GraphDirection", Value: c.GraphDirection, Message: "must be \"LR\" or \"TD\""}
 	}
 	if c.StyleType != "cli" && c.StyleType != "html" {
 		return &ConfigError{Field: "StyleType", Value: c.StyleType, Message: "must be \"cli\" or \"html\""}
+	}
+	if c.MaxWidth < 0 {
+		return &ConfigError{Field: "MaxWidth", Value: c.MaxWidth, Message: "must be non-negative"}
+	}
+	if c.FitPolicy != "" && c.FitPolicy != FitPolicyNone && c.FitPolicy != FitPolicyAuto {
+		return &ConfigError{Field: "FitPolicy", Value: c.FitPolicy, Message: "must be \"none\" or \"auto\""}
+	}
+	if c.LabelWrapWidth < 0 {
+		return &ConfigError{Field: "LabelWrapWidth", Value: c.LabelWrapWidth, Message: "must be non-negative"}
+	}
+	if c.EdgeLabelMaxWidth < 0 {
+		return &ConfigError{Field: "EdgeLabelMaxWidth", Value: c.EdgeLabelMaxWidth, Message: "must be non-negative"}
+	}
+	if c.EdgeLabelPolicy != "" &&
+		c.EdgeLabelPolicy != EdgeLabelPolicyFull &&
+		c.EdgeLabelPolicy != EdgeLabelPolicyEllipsis &&
+		c.EdgeLabelPolicy != EdgeLabelPolicyDrop {
+		return &ConfigError{Field: "EdgeLabelPolicy", Value: c.EdgeLabelPolicy, Message: "must be \"full\", \"ellipsis\", or \"drop\""}
 	}
 
 	// Validate sequence diagram configuration

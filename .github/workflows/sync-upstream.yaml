@@ -1,0 +1,57 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/AlexanderGrooff/mermaid-ascii.git
+          git fetch upstream master
+
+      - name: Attempt merge
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git merge upstream/master --no-edit; then
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push if no conflicts
+        if: steps.merge.outputs.conflict == 'false'
+        run: git push origin master
+
+      - name: Create PR if conflicts
+        if: steps.merge.outputs.conflict == 'true'
+        run: |
+          BRANCH="sync-upstream-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          git merge upstream/master --no-edit || true
+          git add -A
+          git commit -m "chore: merge upstream master (conflicts)" || true
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore: sync upstream master (conflicts)" \
+            --body "Automated upstream sync encountered merge conflicts. Please resolve manually." \
+            --base master \
+            --head "$BRANCH"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

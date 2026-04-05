@@ -15,3 +15,13 @@ mermaid-ascii
 *.tar.gz
 *.tar.zst
 result
+
+# Python
+.venv
+__pycache__
+*.pyc
+*.egg-info
+python/src/mermaid_ascii/mermaid-ascii
+
+# Sisyphus
+.sisyphus

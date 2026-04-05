@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gookit/color"
+	"github.com/mattn/go-runewidth"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -59,48 +60,60 @@ func (g *graph) drawLine(d *drawing, from drawingCoord, to drawingCoord, offsetF
 	// Offset determines how far from the actual coord the line should start/stop.
 	direction := determineDirection(genericCoord(from), genericCoord(to))
 	drawnCoords := make([]drawingCoord, 0)
+	maxX, maxY := getDrawingSize(d)
 	log.Debug("Drawing line from ", from, " to ", to, " direction: ", direction, " offsetFrom: ", offsetFrom, " offsetTo: ", offsetTo)
+
+	// safeSet writes a character to the drawing only when (x,y) is within
+	// bounds.  This prevents panics when edge routing produces coordinates
+	// at or past the drawing boundary (e.g. zero-width grid columns under
+	// tight fit plans).
+	safeSet := func(x, y int, ch string) {
+		if x >= 0 && x <= maxX && y >= 0 && y <= maxY {
+			(*d)[x][y] = ch
+		}
+	}
+
 	if !g.useAscii {
 		switch direction {
 		case Up:
 			for y := from.y - offsetFrom; y >= to.y-offsetTo; y-- {
 				drawnCoords = append(drawnCoords, drawingCoord{from.x, y})
-				(*d)[from.x][y] = "│"
+				safeSet(from.x, y, "│")
 			}
 		case Down:
 			for y := from.y + offsetFrom; y <= to.y+offsetTo; y++ {
 				drawnCoords = append(drawnCoords, drawingCoord{from.x, y})
-				(*d)[from.x][y] = "│"
+				safeSet(from.x, y, "│")
 			}
 		case Left:
 			for x := from.x - offsetFrom; x >= to.x-offsetTo; x-- {
 				drawnCoords = append(drawnCoords, drawingCoord{x, from.y})
-				(*d)[x][from.y] = "─"
+				safeSet(x, from.y, "─")
 			}
 		case Right:
 			for x := from.x + offsetFrom; x <= to.x+offsetTo; x++ {
 				drawnCoords = append(drawnCoords, drawingCoord{x, from.y})
-				(*d)[x][from.y] = "─"
+				safeSet(x, from.y, "─")
 			}
 		case UpperLeft:
 			for x, y := from.x, from.y-offsetFrom; x >= to.x-offsetTo && y >= to.y-offsetTo; x, y = x-1, y-1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, y})
-				(*d)[x][y] = "╲"
+				safeSet(x, y, "╲")
 			}
 		case UpperRight:
 			for x, y := from.x, from.y-offsetFrom; x <= to.x+offsetTo && y >= to.y-offsetTo; x, y = x+1, y-1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, y})
-				(*d)[x][y] = "╱"
+				safeSet(x, y, "╱")
 			}
 		case LowerLeft:
 			for x, y := from.x, from.y+offsetFrom; x >= to.x-offsetTo && y <= to.y+offsetTo; x, y = x-1, y+1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, y})
-				(*d)[x][y] = "╱"
+				safeSet(x, y, "╱")
 			}
 		case LowerRight:
 			for x, y := from.x, from.y+offsetFrom; x <= to.x+offsetTo && y <= to.y+offsetTo; x, y = x+1, y+1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, y})
-				(*d)[x][y] = "╲"
+				safeSet(x, y, "╲")
 			}
 		}
 	} else {
@@ -108,42 +121,42 @@ func (g *graph) drawLine(d *drawing, from drawingCoord, to drawingCoord, offsetF
 		case Up:
 			for y := from.y - offsetFrom; y >= to.y-offsetTo; y-- {
 				drawnCoords = append(drawnCoords, drawingCoord{from.x, y})
-				(*d)[from.x][y] = "|"
+				safeSet(from.x, y, "|")
 			}
 		case Down:
 			for y := from.y + offsetFrom; y <= to.y+offsetTo; y++ {
 				drawnCoords = append(drawnCoords, drawingCoord{from.x, y})
-				(*d)[from.x][y] = "|"
+				safeSet(from.x, y, "|")
 			}
 		case Left:
 			for x := from.x - offsetFrom; x >= to.x-offsetTo; x-- {
 				drawnCoords = append(drawnCoords, drawingCoord{x, from.y})
-				(*d)[x][from.y] = "-"
+				safeSet(x, from.y, "-")
 			}
 		case Right:
 			for x := from.x + offsetFrom; x <= to.x+offsetTo; x++ {
 				drawnCoords = append(drawnCoords, drawingCoord{x, from.y})
-				(*d)[x][from.y] = "-"
+				safeSet(x, from.y, "-")
 			}
 		case UpperLeft:
 			for x, y := from.x, from.y-offsetFrom; x >= to.x-offsetTo && y >= to.y-offsetTo; x, y = x-1, y-1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, y})
-				(*d)[x][y] = "\\"
+				safeSet(x, y, "\\")
 			}
 		case UpperRight:
 			for x, y := from.x, from.y-offsetFrom; x <= to.x+offsetTo && y >= to.y-offsetTo; x, y = x+1, y-1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, y})
-				(*d)[x][y] = "/"
+				safeSet(x, y, "/")
 			}
 		case LowerLeft:
 			for x, y := from.x, from.y+offsetFrom; x >= to.x-offsetTo && y <= to.y+offsetTo; x, y = x-1, y+1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, y})
-				(*d)[x][y] = "/"
+				safeSet(x, y, "/")
 			}
 		case LowerRight:
 			for x, y := from.x, from.y+offsetFrom; x <= to.x+offsetTo && y <= to.y+offsetTo; x, y = x+1, y+1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, y})
-				(*d)[x][y] = "\\"
+				safeSet(x, y, "\\")
 			}
 		}
 	}
@@ -151,12 +164,21 @@ func (g *graph) drawLine(d *drawing, from drawingCoord, to drawingCoord, offsetF
 }
 
 func drawMap(properties *graphProperties) string {
-	g := mkGraph(properties.data)
+	g := mkGraph(properties.data, properties.nodeSpecs)
 	g.setStyleClasses(properties)
 	g.paddingX = properties.paddingX
 	g.paddingY = properties.paddingY
 	g.useAscii = properties.useAscii
+	g.labelWrapWidth = properties.labelWrapWidth
+	g.edgeLabelPolicy = properties.edgeLabelPolicy
+	g.edgeLabelMaxWidth = properties.edgeLabelMaxWidth
+	g.maxNodesPerLevel = properties.maxNodesPerLevel
 	g.setSubgraphs(properties.subgraphs)
+	if g.labelWrapWidth > 0 {
+		for _, n := range g.nodes {
+			n.label = n.label.withWrapWidth(g.labelWrapWidth)
+		}
+	}
 	g.createMapping()
 	d := g.draw()
 	if Coords {
@@ -227,11 +249,22 @@ func drawBox(n *node, g graph) *drawing {
 		boxDrawing[from.x][to.y] = "+"   // Bottom left corner
 		boxDrawing[to.x][to.y] = "+"     // Bottom right corner
 	}
-	// Draw text
-	textY := from.y + h/2
-	textX := from.x + w/2 - CeilDiv(len(n.name), 2) + 1
-	for x := 0; x < len(n.name); x++ {
-		boxDrawing[textX+x][textY] = wrapTextInColor(string(n.name[x]), n.styleClass.styles["color"], g.styleType)
+	// Draw label lines inside the padded content area.
+	innerTop := from.y + 1
+	innerHeight := h - 1
+	contentTop := innerTop + (innerHeight-n.label.contentHeight())/2
+	for lineIdx, line := range n.label.lines {
+		textY := contentTop + lineIdx*(graphLabelLineGap+1)
+		textWidth := runewidth.StringWidth(line)
+		textX := from.x + w/2 - CeilDiv(textWidth, 2) + 1
+		for _, r := range line {
+			runeWidth := Max(runewidth.RuneWidth(r), 1)
+			boxDrawing[textX][textY] = wrapTextInColor(string(r), n.styleClass.styles["color"], g.styleType)
+			for offset := 1; offset < runeWidth; offset++ {
+				boxDrawing[textX+offset][textY] = ""
+			}
+			textX += runeWidth
+		}
 	}
 
 	return &boxDrawing
@@ -316,15 +349,22 @@ func drawSubgraphLabel(sg *subgraph, g graph) (*drawing, drawingCoord) {
 	to := drawingCoord{width, height}
 	labelDrawing := *(mkDrawing(width, height))
 
-	// Draw label centered at top
-	labelY := from.y + 1
-	labelX := from.x + width/2 - len(sg.name)/2
-	if labelX < from.x+1 {
-		labelX = from.x + 1
-	}
-	for i, char := range sg.name {
-		if labelX+i < to.x {
-			labelDrawing[labelX+i][labelY] = string(char)
+	// Draw label centered at top.
+	for lineIdx, line := range sg.label.lines {
+		labelY := from.y + 1 + lineIdx*(graphLabelLineGap+1)
+		labelX := from.x + width/2 - runewidth.StringWidth(line)/2
+		if labelX < from.x+1 {
+			labelX = from.x + 1
+		}
+		for _, char := range line {
+			runeWidth := Max(runewidth.RuneWidth(char), 1)
+			if labelX < to.x {
+				labelDrawing[labelX][labelY] = string(char)
+			}
+			for offset := 1; offset < runeWidth && labelX+offset < to.x; offset++ {
+				labelDrawing[labelX+offset][labelY] = ""
+			}
+			labelX += runeWidth
 		}
 	}
 

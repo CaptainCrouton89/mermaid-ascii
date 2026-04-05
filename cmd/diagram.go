@@ -82,8 +82,18 @@ func (gd *GraphDiagram) Render(config *diagram.Config) (string, error) {
 	if styleType == "" {
 		styleType = "cli"
 	}
+	gd.properties.boxBorderPadding = config.BoxBorderPadding
+	gd.properties.paddingX = config.PaddingBetweenX
+	gd.properties.paddingY = config.PaddingBetweenY
 	gd.properties.styleType = styleType
 	gd.properties.useAscii = config.UseAscii
+	gd.properties.labelWrapWidth = config.LabelWrapWidth
+	gd.properties.edgeLabelPolicy = config.EdgeLabelPolicy
+	gd.properties.edgeLabelMaxWidth = config.EdgeLabelMaxWidth
+
+	if config.FitPolicy == diagram.FitPolicyAuto && config.MaxWidth > 0 {
+		return fitGraphToWidth(gd.properties, config), nil
+	}
 
 	return drawMap(gd.properties), nil
 }
