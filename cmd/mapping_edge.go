@@ -114,37 +114,72 @@ func (g *graph) determineLabelLine(e *edge) {
 	if lenLabel == 0 {
 		return
 	}
+	// Widening a column that is occupied by a node would push that node's
+	// border out, leaving a visible gap between the box and any incoming
+	// arrowhead. Prefer label-line candidates whose target column is a free
+	// edge corridor; only fall back to a node column if no corridor segment
+	// is available.
 	prevStep := e.path[0]
+	var largestLine []gridCoord
 	var largestLineSize int
-	// Init to first line if we find nothing else
-	largestLine := []gridCoord{prevStep, e.path[1]}
-	largestLineSize = 0
+	var fallbackLine []gridCoord
+	var fallbackLineSize int
 	for _, step := range e.path[1:] {
 		line := []gridCoord{gridCoord(prevStep), gridCoord(step)}
+		prevStep = step
 		lineWidth := g.calculateLineWidth(line)
+		if g.isNodeColumn(labelMiddleX(line)) {
+			if lineWidth > fallbackLineSize {
+				fallbackLineSize = lineWidth
+				fallbackLine = line
+			}
+			continue
+		}
 		if lineWidth >= lenLabel {
 			largestLine = line
 			break
-		} else if lineWidth > largestLineSize {
+		}
+		if lineWidth > largestLineSize {
 			largestLineSize = lineWidth
 			largestLine = line
 		}
-		prevStep = step
+	}
+	if largestLine == nil {
+		largestLine = fallbackLine
+	}
+	if largestLine == nil {
+		// Path only had a single segment that lives on a node column; use it
+		// rather than dropping the label entirely.
+		largestLine = []gridCoord{e.path[0], e.path[1]}
 	}
 
-	var maxX, minX int
-	if largestLine[0].x > largestLine[1].x {
-		maxX = largestLine[0].x
-		minX = largestLine[1].x
-	} else {
-		maxX = largestLine[1].x
-		minX = largestLine[0].x
-	}
-	middleX := minX + (maxX-minX)/2
+	middleX := labelMiddleX(largestLine)
 	log.Debugf("Increasing column width for column %v from size %v to %v", middleX, g.columnWidth[middleX], lenLabel+2)
 	g.columnWidth[middleX] = Max(g.columnWidth[middleX], lenLabel+2) // Wrap with dashes + arrowhead
 	log.Debugf("New column sizes: %v", g.columnWidth)
 	e.labelLine = largestLine
+}
+
+func labelMiddleX(line []gridCoord) int {
+	minX, maxX := line[0].x, line[1].x
+	if minX > maxX {
+		minX, maxX = maxX, minX
+	}
+	return minX + (maxX-minX)/2
+}
+
+// isNodeColumn reports whether grid column x is occupied by any node.
+// Widening such a column distorts the box that owns it.
+func (g *graph) isNodeColumn(x int) bool {
+	for _, n := range g.nodes {
+		if n.gridCoord == nil {
+			continue
+		}
+		if x >= n.gridCoord.x && x <= n.gridCoord.x+2 {
+			return true
+		}
+	}
+	return false
 }
 
 func (g graph) calculateLineWidth(line []gridCoord) int {
