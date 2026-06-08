@@ -30,6 +30,7 @@ func (g graph) lineToDrawing(line []gridCoord) []drawingCoord {
 }
 
 type graph struct {
+<<<<<<< HEAD
 	nodes        []*node
 	edges        []*edge
 	drawing      *drawing
@@ -51,6 +52,25 @@ type graph struct {
 	edgeLabelPolicy   string
 	edgeLabelMaxWidth int
 	maxNodesPerLevel  int
+=======
+	nodes            []*node
+	edges            []*edge
+	drawing          *drawing
+	grid             map[gridCoord]*node
+	edgeCounts       map[edgePair]int
+	columnWidth      map[int]int
+	rowHeight        map[int]int
+	styleClasses     map[string]styleClass
+	styleType        string
+	boxBorderPadding int
+	graphDirection   string
+	paddingX         int
+	paddingY         int
+	subgraphs        []*subgraph
+	offsetX          int
+	offsetY          int
+	useAscii         bool
+>>>>>>> upstream/master
 }
 
 type edgePair struct {

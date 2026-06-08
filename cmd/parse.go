@@ -12,6 +12,7 @@ import (
 )
 
 type graphProperties struct {
+<<<<<<< HEAD
 	data              *orderedmap.OrderedMap[string, []textEdge]
 	nodeSpecs         map[string]graphNodeSpec
 	styleClasses      *map[string]styleClass
@@ -26,6 +27,18 @@ type graphProperties struct {
 	edgeLabelPolicy   string
 	edgeLabelMaxWidth int
 	maxNodesPerLevel  int
+=======
+	data             *orderedmap.OrderedMap[string, []textEdge]
+	nodeSpecs        map[string]graphNodeSpec
+	styleClasses     *map[string]styleClass
+	boxBorderPadding int
+	graphDirection   string
+	styleType        string
+	paddingX         int
+	paddingY         int
+	subgraphs        []*textSubgraph
+	useAscii         bool
+>>>>>>> upstream/master
 }
 
 type textNode struct {
@@ -36,9 +49,9 @@ type textNode struct {
 }
 
 type graphNodeSpec struct {
-	label            graphLabel
-	labelIsExplicit  bool
-	styleClass       string
+	label           graphLabel
+	labelIsExplicit bool
+	styleClass      string
 }
 
 type textEdge struct {
