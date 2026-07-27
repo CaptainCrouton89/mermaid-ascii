@@ -326,6 +326,32 @@ $ mermaid-ascii -f sequence.mermaid
     │◄┈┈┈┈┈┈┈┈┈┈┈┤
     │            │
 
+# Loop and opt blocks are drawn as labelled frames (and can be nested)
+$ cat sequence.mermaid
+sequenceDiagram
+Alice->>Bob: Hello
+loop every minute
+Alice->>Bob: Ping
+Bob-->>Alice: Pong
+end
+$ mermaid-ascii -f sequence.mermaid
+┌───────┐     ┌─────┐
+│ Alice │     │ Bob │
+└───┬───┘     └──┬──┘
+    │            │
+    │ Hello      │
+    ├───────────►│
+  ┌─[loop every minute]─┐
+  │ │            │      │
+  │ │ Ping       │      │
+  │ ├───────────►│      │
+  │ │            │      │
+  │ │ Pong       │      │
+  │ │◄┈┈┈┈┈┈┈┈┈┈┈┤      │
+  │ │            │      │
+  └─────────────────────┘
+    │            │
+
 # ASCII mode for sequence diagrams
 $ cat sequence.mermaid | mermaid-ascii --ascii
 +-------+     +-----+
@@ -340,6 +366,55 @@ $ cat sequence.mermaid | mermaid-ascii --ascii
     |            |
 
 ```
+
+### Entity Relationship Diagrams
+
+Entity relationship diagrams render entities as tables and relationships as crow's-foot connectors, with each relationship label on its own line so they never collide.
+
+```bash
+# Relationships with cardinality and labels
+$ cat er.mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    CUSTOMER }|..|{ DELIVERY_ADDRESS : uses
+$ mermaid-ascii -f er.mermaid
+┌──────────┐                 ┌───────┐
+│ CUSTOMER │                 │ ORDER │
+└───┬───┬──┘                 └──┬───┬┘
+    └||─┼──────places─────────o{┘   │
+       ┌}|────────contains────────||┘
+       │└}|┈┈┈┈┈┈┈┈┈┈┈uses┈┈┈┈┈┈┈┈┈┈┈|{┐
+┌──────┴────┐                ┌─────────┴────────┐
+│ LINE_ITEM │                │ DELIVERY_ADDRESS │
+└───────────┘                └──────────────────┘
+
+# Entities with typed attributes, keys and comments
+$ cat er.mermaid
+erDiagram
+    CUSTOMER {
+        string name PK
+        string email
+        int loyaltyPoints
+    }
+    ORDER {
+        int id PK
+        decimal(10,2) total
+    }
+    CUSTOMER ||--o{ ORDER : places
+$ mermaid-ascii -f er.mermaid
+┌─────────────────────────────┐            ┌────────────────────────────┐
+│          CUSTOMER           │            │           ORDER            │
+├────────┬───────────────┬────┤            ├───────────────┬───────┬────┤
+│ string │ name          │ PK │            │ int           │ id    │ PK │
+│ string │ email         │    │            │ decimal(10,2) │ total │    │
+│ int    │ loyaltyPoints │    │            └──────────────┬┴───────┴────┘
+└────────┴──────┬────────┴────┘                           │
+                └||───────────────places────────────────o{┘
+
+```
+
+Identifying relationships (`--`) are drawn solid, non-identifying ones (`..`) dashed. All crow's-foot cardinalities are supported (`||`, `|o`, `}o`, `}|` on either side), as well as the numeric (`1`, `0+`, `1+`) and word (`only one`, `zero or more`, …) forms.
 
 ```bash
 $ mermaid-ascii --help
@@ -519,15 +594,30 @@ Note that with `--coords` enabled, the grid-coords shown show the starting locat
 
 ### Sequence Diagrams ✅
 - [x] Basic message syntax (`A->>B: message`)
-- [x] Solid arrows (`->>`) and dotted arrows (`-->>`)
+- [x] Solid and dotted arrows, with or without an arrowhead (`->>`, `-->>`, `->`, `-->`)
 - [x] Self-messages (`A->>A: think`)
 - [x] Participant declarations (`participant Alice`)
 - [x] Participant aliases (`participant A as Alice`)
 - [x] Unicode support (emojis, CJK characters, etc.)
 - [x] Both ASCII and Unicode rendering modes
+- [x] `loop` and `opt` blocks (incl. nesting)
+- [x] `autonumber`
+- [x] Notes (`Note over A`, `Note over A,B`, `Note left of A`, `Note right of A`)
 - [ ] Activation boxes
-- [ ] Notes (`Note left of Alice: text`)
-- [ ] Loops, alt, opt blocks
+- [x] `alt`/`else` blocks (incl. multiple else, nesting)
+- [x] `par`/`and`, `critical`/`option`, `break`, `rect` blocks
+
+### Entity Relationship Diagrams ✅
+- [x] Relationships with all crow's-foot cardinalities (`||--o{`, `}|..|{`, …)
+- [x] Numeric (`1`, `0+`, `1+`) and word (`one or more`, `zero or one`, …) cardinalities
+- [x] Identifying (solid) and non-identifying (dashed) relationships
+- [x] Relationship labels, collision-free (one routing lane per relationship)
+- [x] Entity attribute tables: type, name, keys (PK/FK/UK) and comments
+- [x] Entity aliases (`CUSTOMER c {`, `CUSTOMER["Customer"]`)
+- [x] Self-relationships (`EMPLOYEE ||--o{ EMPLOYEE : manages`)
+- [x] Both ASCII and Unicode rendering modes
+- [ ] `MD_PARENT` (`u--`) cardinality
+- [ ] `style` / `classDef` styling directives (parsed and ignored)
 
 ## TODOs
 
@@ -554,8 +644,10 @@ The baseline components for Mermaid work, but there are a lot of things that are
 ### Sequence Diagram Improvements
 
 - [ ] Activation boxes (activate/deactivate)
-- [ ] Notes (`Note left of Alice: text`)
-- [ ] Loops, alt, opt, and par blocks
+- [x] Notes (`Note over`/`left of`/`right of`)
+- [x] `loop` and `opt` blocks
+- [x] `alt`/`else` blocks
+- [x] `par`, `critical`, `break`, and `rect` blocks
 
 ### General
 
