@@ -16,20 +16,170 @@ const (
 
 var (
 	// participantRegex matches participant declarations: participant [ID] [as Label]
-	participantRegex = regexp.MustCompile(`^\s*participant\s+(?:"([^"]+)"|(\S+))(?:\s+as\s+(.+))?$`)
+	participantRegex = regexp.MustCompile(`(?i)^\s*participant\s+(?:"([^"]+)"|(\S+))(?:\s+as\s+(.+))?$`)
 
-	// messageRegex matches messages: [From]->>[To]: [Label]
-	messageRegex = regexp.MustCompile(`^\s*(?:"([^"]+)"|([^\s\->]+))\s*(-->>|->>)\s*(?:"([^"]+)"|([^\s\->]+))\s*:\s*(.*)$`)
+	// messageRegex matches messages: [From][()][arrow][()][To]: [Label]. The
+	// arrow is one of mermaid's ten message types: ->> / -->> (arrowhead),
+	// -> / --> (open), -x / --x (cross), -) / --) (async point), <<->> /
+	// <<-->> (bidirectional). Longer alternatives come first so e.g. "-->>"
+	// is never consumed as "-->". An optional "()" on either side of the
+	// arrow marks a central connection (mermaid 11.16): a circle where the
+	// message meets that lifeline. Unquoted participant names exclude the
+	// arrow characters (- > <) so a malformed arrow cannot be silently
+	// absorbed into a name — it fails to match and is reported as invalid
+	// syntax rather than rendered wrongly — and "(" so a central-connection
+	// marker binds to the arrow, not the name (mermaid's ACTOR token excludes
+	// parentheses too).
+	messageRegex = regexp.MustCompile(`^\s*(?:"([^"]+)"|([^\s<>(-]+))\s*(\(\))?\s*(<<-->>|<<->>|-->>|--[x)]|-->|->>|-[x)]|->)\s*(\(\))?\s*(?:"([^"]+)"|([^\s<>(-]+))\s*:\s*(.*)$`)
 
 	// autonumberRegex matches the autonumber directive
-	autonumberRegex = regexp.MustCompile(`^\s*autonumber\s*$`)
+	autonumberRegex = regexp.MustCompile(`(?i)^\s*autonumber\s*$`)
+
+	// fragmentStartRegex matches the opening line of a control-flow fragment,
+	// e.g. "loop every minute", "opt is premium", "alt is valid". Group 1 is the
+	// keyword, group 2 is the (optional) label describing the condition.
+	fragmentStartRegex = regexp.MustCompile(`(?i)^\s*(loop|opt|alt|par|critical|break|rect)\b\s*(.*)$`)
+
+	// fragmentDividerRegex matches a section divider inside a fragment: "else"
+	// (alt), "and" (par), or "option" (critical). Group 1 is the keyword, group 2
+	// the (optional) label for the following section.
+	fragmentDividerRegex = regexp.MustCompile(`(?i)^\s*(else|and|option)\b\s*(.*)$`)
+
+	// rectColorRegex strips a leading rgb()/rgba() colour argument from a rect's
+	// label (ASCII can't render the fill; PR6 draws a plain frame).
+	rectColorRegex = regexp.MustCompile(`(?i)^\s*rgba?\([^)]*\)\s*`)
+
+	// fragmentEndRegex matches the "end" line that closes a fragment.
+	fragmentEndRegex = regexp.MustCompile(`(?i)^\s*end\s*$`)
+
+	// noteRegex matches note annotations: "Note over A: text", "note left of A:
+	// text", "Note over A,B: text" (case-insensitive keyword). Group 1 is the
+	// placement, group 2 the participant list, group 3 the text.
+	noteRegex = regexp.MustCompile(`(?i)^\s*note\s+(right of|left of|over)\s+([^:]+?)\s*:\s*(.*)$`)
 )
 
 // SequenceDiagram represents a parsed sequence diagram.
 type SequenceDiagram struct {
 	Participants []*Participant
-	Messages     []*Message
-	Autonumber   bool
+	// Messages is the flat list of every message arrow, in source order and
+	// independent of any fragment nesting. Kept for callers that only care
+	// about the messages themselves (and for backward compatibility).
+	Messages []*Message
+	// Events is the ordered body of the diagram used for rendering: each entry
+	// is either a message or a fragment boundary. Walking Events reproduces the
+	// original source order, including where loop/opt blocks open and close.
+	Events     []Event
+	Autonumber bool
+}
+
+// FragmentType identifies a control-flow fragment (a "framed" block of
+// messages) such as a loop or an optional section.
+type FragmentType int
+
+const (
+	FragmentLoop     FragmentType = iota // loop ... end
+	FragmentOpt                          // opt ... end
+	FragmentAlt                          // alt ... else ... end
+	FragmentPar                          // par ... and ... end
+	FragmentCritical                     // critical ... option ... end
+	FragmentBreak                        // break ... end
+	FragmentRect                         // rect ... end
+)
+
+func (f FragmentType) String() string {
+	switch f {
+	case FragmentLoop:
+		return "loop"
+	case FragmentOpt:
+		return "opt"
+	case FragmentAlt:
+		return "alt"
+	case FragmentPar:
+		return "par"
+	case FragmentCritical:
+		return "critical"
+	case FragmentBreak:
+		return "break"
+	case FragmentRect:
+		return "rect"
+	default:
+		return fmt.Sprintf("FragmentType(%d)", int(f))
+	}
+}
+
+// fragmentKeywords maps an opener keyword to its fragment type.
+var fragmentKeywords = map[string]FragmentType{
+	"loop": FragmentLoop, "opt": FragmentOpt, "alt": FragmentAlt,
+	"par": FragmentPar, "critical": FragmentCritical,
+	"break": FragmentBreak, "rect": FragmentRect,
+}
+
+// dividerKeywords maps a section-divider keyword to the fragment type it must
+// appear inside.
+var dividerKeywords = map[string]FragmentType{
+	"else": FragmentAlt, "and": FragmentPar, "option": FragmentCritical,
+}
+
+// Fragment describes the opening of a control-flow block: its kind and the
+// optional condition text shown in the frame's label tab.
+type Fragment struct {
+	Type  FragmentType
+	Label string
+}
+
+// EventKind tags each Event in the diagram body.
+type EventKind int
+
+const (
+	EventMessage         EventKind = iota // a message arrow
+	EventFragmentStart                    // the opening line of a loop/opt/alt block
+	EventFragmentDivider                  // an "else" section divider within an alt
+	EventFragmentEnd                      // the matching "end" line
+	EventNote                             // a note annotation
+)
+
+func (k EventKind) String() string {
+	switch k {
+	case EventMessage:
+		return "message"
+	case EventFragmentStart:
+		return "fragment-start"
+	case EventFragmentDivider:
+		return "fragment-divider"
+	case EventFragmentEnd:
+		return "fragment-end"
+	case EventNote:
+		return "note"
+	default:
+		return fmt.Sprintf("EventKind(%d)", int(k))
+	}
+}
+
+// Event is one item in the diagram body. Exactly one payload field is set:
+// Message when Kind is EventMessage, Fragment when Kind is EventFragmentStart,
+// Note when Kind is EventNote. An EventFragmentEnd carries no payload; it just
+// marks where a block closes.
+type Event struct {
+	Kind     EventKind
+	Message  *Message
+	Fragment *Fragment
+	Note     *Note
+}
+
+// NotePlacement describes where a note box sits relative to its participant(s).
+type NotePlacement int
+
+const (
+	NoteOver    NotePlacement = iota // note over A  /  note over A,B
+	NoteLeftOf                       // note left of A
+	NoteRightOf                      // note right of A
+)
+
+// Note is an annotation box drawn over or beside participant lifelines.
+type Note struct {
+	Placement    NotePlacement
+	Participants []*Participant // one participant, or two for "over A,B"
+	Text         string
 }
 
 type Participant struct {
@@ -43,15 +193,65 @@ type Message struct {
 	To        *Participant
 	Label     string
 	ArrowType ArrowType
-	Number    int // Message number when autonumber is enabled (0 means no number)
+	// CentralFrom / CentralTo mark central connections (mermaid's "()" on
+	// either side of the arrow): a circle drawn where the message meets that
+	// participant's lifeline.
+	CentralFrom bool
+	CentralTo   bool
+	Number      int // Message number when autonumber is enabled (0 means no number)
 }
 
 type ArrowType int
 
 const (
-	SolidArrow ArrowType = iota
-	DottedArrow
+	SolidArrow          ArrowType = iota // ->>    solid line with an arrowhead
+	DottedArrow                          // -->>   dotted line with an arrowhead
+	SolidOpen                            // ->     solid line, no arrowhead
+	DottedOpen                           // -->    dotted line, no arrowhead
+	SolidCross                           // -x     solid line, cross head (lost/failed message)
+	DottedCross                          // --x    dotted line, cross head
+	SolidPoint                           // -)     solid line, open point head (async message)
+	DottedPoint                          // --)    dotted line, open point head
+	BidirectionalSolid                   // <<->>  solid line, arrowheads both ends
+	BidirectionalDotted                  // <<-->> dotted line, arrowheads both ends
 )
+
+// isDotted reports whether the arrow is drawn with a dotted (rather than solid)
+// line.
+func (a ArrowType) isDotted() bool {
+	switch a {
+	case DottedArrow, DottedOpen, DottedCross, DottedPoint, BidirectionalDotted:
+		return true
+	}
+	return false
+}
+
+// isBidirectional reports whether the arrow carries a head at the source end
+// too (mermaid's <<->> and <<-->>).
+func (a ArrowType) isBidirectional() bool {
+	return a == BidirectionalSolid || a == BidirectionalDotted
+}
+
+// head returns the glyph drawn where the arrow meets the target lifeline, and
+// false for the open forms (-> and -->), which are drawn as a plain line
+// touching the lifeline. rightward selects the direction the head points.
+func (a ArrowType) head(chars BoxChars, rightward bool) (rune, bool) {
+	switch a {
+	case SolidArrow, DottedArrow, BidirectionalSolid, BidirectionalDotted:
+		if rightward {
+			return chars.ArrowRight, true
+		}
+		return chars.ArrowLeft, true
+	case SolidCross, DottedCross:
+		return chars.CrossHead, true
+	case SolidPoint, DottedPoint:
+		if rightward {
+			return chars.PointRight, true
+		}
+		return chars.PointLeft, true
+	}
+	return 0, false
+}
 
 func (a ArrowType) String() string {
 	switch a {
@@ -59,8 +259,24 @@ func (a ArrowType) String() string {
 		return "solid"
 	case DottedArrow:
 		return "dotted"
+	case SolidOpen:
+		return "solid-open"
+	case DottedOpen:
+		return "dotted-open"
+	case SolidCross:
+		return "solid-cross"
+	case DottedCross:
+		return "dotted-cross"
+	case SolidPoint:
+		return "solid-point"
+	case DottedPoint:
+		return "dotted-point"
+	case BidirectionalSolid:
+		return "bidirectional-solid"
+	case BidirectionalDotted:
+		return "bidirectional-dotted"
 	default:
-		return fmt.Sprintf("ArrowType(%d)", a)
+		return fmt.Sprintf("ArrowType(%d)", int(a))
 	}
 }
 
@@ -71,9 +287,23 @@ func IsSequenceDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, SequenceDiagramKeyword)
+		return hasSequenceKeyword(trimmed)
 	}
 	return false
+}
+
+// hasSequenceKeyword reports whether a line is the sequenceDiagram declaration,
+// case-insensitively (mermaid's sequence grammar is case-insensitive). The
+// keyword must stand as a whole token — followed by whitespace or end of line —
+// so a node id like "sequenceDiagramFoo" in a flowchart isn't misrouted here.
+func hasSequenceKeyword(line string) bool {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	kw := strings.ToLower(SequenceDiagramKeyword)
+	if !strings.HasPrefix(lower, kw) {
+		return false
+	}
+	rest := lower[len(kw):]
+	return rest == "" || rest[0] == ' ' || rest[0] == '\t'
 }
 
 func Parse(input string) (*SequenceDiagram, error) {
@@ -88,7 +318,7 @@ func Parse(input string) (*SequenceDiagram, error) {
 		return nil, fmt.Errorf("no content found")
 	}
 
-	if !strings.HasPrefix(strings.TrimSpace(lines[0]), SequenceDiagramKeyword) {
+	if !hasSequenceKeyword(strings.TrimSpace(lines[0])) {
 		return nil, fmt.Errorf("expected %q keyword", SequenceDiagramKeyword)
 	}
 	lines = lines[1:]
@@ -99,6 +329,10 @@ func Parse(input string) (*SequenceDiagram, error) {
 		Autonumber:   false,
 	}
 	participantMap := make(map[string]*Participant)
+	// openFragments is a stack of the fragment types currently open, so we can
+	// reject an "end"/"else" with no matching opener, validate that "else" only
+	// appears inside an "alt", and detect an opener with no matching "end".
+	var openFragments []FragmentType
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -112,19 +346,104 @@ func Parse(input string) (*SequenceDiagram, error) {
 			continue
 		}
 
+		// Notes carry no arrow, so they never collide with messages; a
+		// placement keyword is required, so a participant named "Note" (e.g.
+		// "Note->>B: hi") still parses as a message further down.
+		if m := noteRegex.FindStringSubmatch(trimmed); m != nil {
+			placement := NoteOver
+			switch strings.ToLower(m[1]) { // keyword may be any case
+			case "left of":
+				placement = NoteLeftOf
+			case "right of":
+				placement = NoteRightOf
+			}
+			var parts []*Participant
+			for _, id := range strings.Split(m[2], ",") {
+				id = strings.Trim(strings.TrimSpace(id), `"`)
+				if id != "" {
+					parts = append(parts, sd.getParticipant(id, participantMap))
+				}
+			}
+			if len(parts) == 0 {
+				return nil, fmt.Errorf("line %d: note without a participant", i+2)
+			}
+			// Mermaid allows an optional wrap:/nowrap: prefix on note text;
+			// wrapping is irrelevant for single-line ASCII, so just strip it.
+			text := strings.TrimSpace(m[3])
+			for _, pre := range []string{"nowrap:", "wrap:"} {
+				if strings.HasPrefix(strings.ToLower(text), pre) {
+					text = strings.TrimSpace(text[len(pre):])
+					break
+				}
+			}
+			sd.Events = append(sd.Events, Event{
+				Kind: EventNote,
+				Note: &Note{Placement: placement, Participants: parts, Text: text},
+			})
+			continue
+		}
+
 		if matched, err := sd.parseParticipant(trimmed, participantMap); err != nil {
 			return nil, fmt.Errorf("line %d: %w", i+2, err)
 		} else if matched {
 			continue
 		}
 
+		// Messages are checked before fragment keywords so a participant named
+		// "loop"/"opt"/"end" (e.g. "loop->>B: hi") is still read as a message —
+		// only bare openers like "loop retry" fall through to the checks below.
 		if matched, err := sd.parseMessage(trimmed, participantMap); err != nil {
 			return nil, fmt.Errorf("line %d: %w", i+2, err)
 		} else if matched {
 			continue
 		}
 
+		// A fragment opener (loop/opt/alt/par/critical/break/rect) starts a block.
+		if match := fragmentStartRegex.FindStringSubmatch(trimmed); match != nil {
+			fType := fragmentKeywords[strings.ToLower(match[1])]
+			label := strings.TrimSpace(match[2])
+			// rect's argument is a fill colour we can't render in ASCII; drop it
+			// so the frame is drawn plain (colour support is a follow-up).
+			if fType == FragmentRect {
+				label = strings.TrimSpace(rectColorRegex.ReplaceAllString(label, ""))
+			}
+			sd.Events = append(sd.Events, Event{
+				Kind:     EventFragmentStart,
+				Fragment: &Fragment{Type: fType, Label: label},
+			})
+			openFragments = append(openFragments, fType)
+			continue
+		}
+
+		// A section divider: "else" (alt), "and" (par), "option" (critical). It
+		// must sit directly inside the matching fragment type.
+		if match := fragmentDividerRegex.FindStringSubmatch(trimmed); match != nil {
+			want := dividerKeywords[strings.ToLower(match[1])]
+			if len(openFragments) == 0 || openFragments[len(openFragments)-1] != want {
+				return nil, fmt.Errorf("line %d: %q outside a matching %s block", i+2, trimmed, want)
+			}
+			sd.Events = append(sd.Events, Event{
+				Kind:     EventFragmentDivider,
+				Fragment: &Fragment{Type: want, Label: strings.TrimSpace(match[2])},
+			})
+			continue
+		}
+
+		// "end" closes the most recently opened fragment.
+		if fragmentEndRegex.MatchString(trimmed) {
+			if len(openFragments) == 0 {
+				return nil, fmt.Errorf("line %d: %q without a matching fragment opener", i+2, trimmed)
+			}
+			sd.Events = append(sd.Events, Event{Kind: EventFragmentEnd})
+			openFragments = openFragments[:len(openFragments)-1]
+			continue
+		}
+
 		return nil, fmt.Errorf("line %d: invalid syntax: %q", i+2, trimmed)
+	}
+
+	if len(openFragments) > 0 {
+		return nil, fmt.Errorf("unclosed fragment: missing %d \"end\"", len(openFragments))
 	}
 
 	if len(sd.Participants) == 0 {
@@ -175,21 +494,42 @@ func (sd *SequenceDiagram) parseMessage(line string, participants map[string]*Pa
 		fromID = match[1]
 	}
 
-	arrow := match[3]
+	centralFrom := match[3] != ""
+	arrow := match[4]
+	centralTo := match[5] != ""
 
-	toID := match[5]
-	if match[4] != "" {
-		toID = match[4]
+	toID := match[7]
+	if match[6] != "" {
+		toID = match[6]
 	}
 
-	label := strings.TrimSpace(match[6])
+	label := strings.TrimSpace(match[8])
 
 	from := sd.getParticipant(fromID, participants)
 	to := sd.getParticipant(toID, participants)
 
-	aType := DottedArrow
-	if arrow == SolidArrowSyntax {
+	var aType ArrowType
+	switch arrow {
+	case "->>":
 		aType = SolidArrow
+	case "-->>":
+		aType = DottedArrow
+	case "->":
+		aType = SolidOpen
+	case "-->":
+		aType = DottedOpen
+	case "-x":
+		aType = SolidCross
+	case "--x":
+		aType = DottedCross
+	case "-)":
+		aType = SolidPoint
+	case "--)":
+		aType = DottedPoint
+	case "<<->>":
+		aType = BidirectionalSolid
+	case "<<-->>":
+		aType = BidirectionalDotted
 	}
 
 	msgNumber := 0
@@ -198,13 +538,16 @@ func (sd *SequenceDiagram) parseMessage(line string, participants map[string]*Pa
 	}
 
 	msg := &Message{
-		From:      from,
-		To:        to,
-		Label:     label,
-		ArrowType: aType,
-		Number:    msgNumber,
+		From:        from,
+		To:          to,
+		Label:       label,
+		ArrowType:   aType,
+		CentralFrom: centralFrom,
+		CentralTo:   centralTo,
+		Number:      msgNumber,
 	}
 	sd.Messages = append(sd.Messages, msg)
+	sd.Events = append(sd.Events, Event{Kind: EventMessage, Message: msg})
 	return true, nil
 }
 

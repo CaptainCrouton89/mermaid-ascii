@@ -57,6 +57,9 @@ func TestIsSequenceDiagram(t *testing.T) {
 		want  bool
 	}{
 		{"sequenceDiagram\nA->>B: Hello", true},
+		{"SEQUENCEDIAGRAM\nA->>B: Hello", true}, // case-insensitive dispatch
+		{"SequenceDiagram\nA->>B: Hello", true}, // mixed case
+		{"sequenceDiagramFoo-->B", false},       // token boundary: a node id, not the keyword
 		{"graph LR\nA-->B", false},
 		{"graph TD\nA-->B", false},
 		{"", false},
@@ -122,7 +125,8 @@ func TestMessageRegex(t *testing.T) {
 		{"A-->>B: Response", "A", "-->>", "B", "Response", true},
 		{`"My Service"->>B: Test`, "My Service", "->>", "B", "Test", true},
 		{"A->>B: ", "A", "->>", "B", "", true},
-		{"A->B: Test", "", "", "", "", false},
+		{"A->B: Test", "A", "->", "B", "Test", true},
+		{"A-->B: Test", "A", "-->", "B", "Test", true},
 		{"A->>B", "", "", "", "", false},
 	}
 
@@ -141,12 +145,12 @@ func TestMessageRegex(t *testing.T) {
 		if match[1] != "" {
 			gotFrom = match[1]
 		}
-		gotArrow := match[3]
-		gotTo := match[5]
-		if match[4] != "" {
-			gotTo = match[4]
+		gotArrow := match[4]
+		gotTo := match[7]
+		if match[6] != "" {
+			gotTo = match[6]
 		}
-		gotLabel := match[6]
+		gotLabel := match[8]
 
 		if gotFrom != tt.wantFrom || gotArrow != tt.wantArrow || gotTo != tt.wantTo || gotLabel != tt.wantLabel {
 			t.Errorf("messageRegex(%q) = (%q, %q, %q, %q), want (%q, %q, %q, %q)",
