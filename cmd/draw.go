@@ -48,18 +48,29 @@ func (g *graph) drawEdge(e *edge) (*drawing, *drawing, *drawing, *drawing, *draw
 }
 
 func (d *drawing) drawText(start drawingCoord, text string) {
-	// Increase dimensions if necessary.
-	d.increaseSize(start.x+len(text), start.y)
-	log.Debug("Drawing '", text, "' from ", start, " to ", drawingCoord{x: start.x + len(text), y: start.y})
-	for x := 0; x < len(text); x++ {
-		(*d)[x+start.x][start.y] = string(text[x])
+	// Increase dimensions if necessary. Use the visual width so multibyte
+	// (e.g. Cyrillic, CJK) runes reserve the correct number of cells.
+	textWidth := runewidth.StringWidth(text)
+	d.increaseSize(start.x+textWidth, start.y)
+	log.Debug("Drawing '", text, "' from ", start, " to ", drawingCoord{x: start.x + textWidth, y: start.y})
+	// Iterate over runes (not bytes) so multibyte characters are placed in a
+	// single cell instead of being split into invalid byte fragments.
+	textX := start.x
+	for _, r := range text {
+		runeWidth := Max(runewidth.RuneWidth(r), 1)
+		(*d)[textX][start.y] = string(r)
+		for offset := 1; offset < runeWidth; offset++ {
+			(*d)[textX+offset][start.y] = ""
+		}
+		textX += runeWidth
 	}
 }
 
-func (g *graph) drawLine(d *drawing, from drawingCoord, to drawingCoord, offsetFrom int, offsetTo int) []drawingCoord {
+func (g *graph) drawLine(d *drawing, from drawingCoord, to drawingCoord, offsetFrom int, offsetTo int, stroke edgeStroke) []drawingCoord {
 	// Offset determines how far from the actual coord the line should start/stop.
 	direction := determineDirection(genericCoord(from), genericCoord(to))
 	drawnCoords := make([]drawingCoord, 0)
+<<<<<<< HEAD
 	maxX, maxY := getDrawingSize(d)
 	log.Debug("Drawing line from ", from, " to ", to, " direction: ", direction, " offsetFrom: ", offsetFrom, " offsetTo: ", offsetTo)
 
@@ -73,27 +84,62 @@ func (g *graph) drawLine(d *drawing, from drawingCoord, to drawingCoord, offsetF
 		}
 	}
 
+=======
+	log.Debug("Drawing line from ", from, " to ", to, " direction: ", direction, " offsetFrom: ", offsetFrom, " offsetTo: ", offsetTo, " stroke: ", stroke)
+>>>>>>> upstream/master
 	if !g.useAscii {
+		// Vertical glyph: solid "│", dotted "┆", thick "┃" - Unicode's own
+		// dedicated dashed/heavy box-drawing glyphs, so (unlike ASCII) no
+		// skip-cell pattern is needed for dotted; the glyph is dashed on its
+		// own. Horizontal glyph: solid "─", dotted "┄", thick "━".
+		vertical := "│"
+		if stroke == strokeThick {
+			vertical = "┃"
+		} else if stroke == strokeDotted {
+			vertical = "┆"
+		}
+		horizontal := "─"
+		if stroke == strokeThick {
+			horizontal = "━"
+		} else if stroke == strokeDotted {
+			horizontal = "┄"
+		}
 		switch direction {
 		case Up:
 			for y := from.y - offsetFrom; y >= to.y-offsetTo; y-- {
 				drawnCoords = append(drawnCoords, drawingCoord{from.x, y})
+<<<<<<< HEAD
 				safeSet(from.x, y, "│")
+=======
+				(*d)[from.x][y] = vertical
+>>>>>>> upstream/master
 			}
 		case Down:
 			for y := from.y + offsetFrom; y <= to.y+offsetTo; y++ {
 				drawnCoords = append(drawnCoords, drawingCoord{from.x, y})
+<<<<<<< HEAD
 				safeSet(from.x, y, "│")
+=======
+				(*d)[from.x][y] = vertical
+>>>>>>> upstream/master
 			}
 		case Left:
 			for x := from.x - offsetFrom; x >= to.x-offsetTo; x-- {
 				drawnCoords = append(drawnCoords, drawingCoord{x, from.y})
+<<<<<<< HEAD
 				safeSet(x, from.y, "─")
+=======
+				(*d)[x][from.y] = horizontal
+>>>>>>> upstream/master
 			}
 		case Right:
 			for x := from.x + offsetFrom; x <= to.x+offsetTo; x++ {
 				drawnCoords = append(drawnCoords, drawingCoord{x, from.y})
+<<<<<<< HEAD
 				safeSet(x, from.y, "─")
+=======
+				(*d)[x][from.y] = horizontal
+>>>>>>> upstream/master
 			}
 		case UpperLeft:
 			for x, y := from.x, from.y-offsetFrom; x >= to.x-offsetTo && y >= to.y-offsetTo; x, y = x-1, y-1 {
@@ -117,26 +163,61 @@ func (g *graph) drawLine(d *drawing, from drawingCoord, to drawingCoord, offsetF
 			}
 		}
 	} else {
+		// Vertical glyphs: solid "|", dotted ":" (every row - ASCII has no
+		// dashed-vertical glyph to space out), thick "I" (a plain, dot-less
+		// stroke; ASCII has no true double-width vertical). Horizontal
+		// glyph: solid/dotted share "-" (dotted skips every other cell
+		// below), thick "=".
+		vertical := "|"
+		if stroke == strokeThick {
+			vertical = "I"
+		} else if stroke == strokeDotted {
+			vertical = ":"
+		}
+		horizontal := "-"
+		if stroke == strokeThick {
+			horizontal = "="
+		}
 		switch direction {
 		case Up:
 			for y := from.y - offsetFrom; y >= to.y-offsetTo; y-- {
 				drawnCoords = append(drawnCoords, drawingCoord{from.x, y})
+<<<<<<< HEAD
 				safeSet(from.x, y, "|")
+=======
+				(*d)[from.x][y] = vertical
+>>>>>>> upstream/master
 			}
 		case Down:
 			for y := from.y + offsetFrom; y <= to.y+offsetTo; y++ {
 				drawnCoords = append(drawnCoords, drawingCoord{from.x, y})
+<<<<<<< HEAD
 				safeSet(from.x, y, "|")
+=======
+				(*d)[from.x][y] = vertical
+>>>>>>> upstream/master
 			}
 		case Left:
-			for x := from.x - offsetFrom; x >= to.x-offsetTo; x-- {
+			for i, x := 0, from.x-offsetFrom; x >= to.x-offsetTo; i, x = i+1, x-1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, from.y})
+<<<<<<< HEAD
 				safeSet(x, from.y, "-")
+=======
+				if stroke != strokeDotted || i%2 == 0 {
+					(*d)[x][from.y] = horizontal
+				}
+>>>>>>> upstream/master
 			}
 		case Right:
-			for x := from.x + offsetFrom; x <= to.x+offsetTo; x++ {
+			for i, x := 0, from.x+offsetFrom; x <= to.x+offsetTo; i, x = i+1, x+1 {
 				drawnCoords = append(drawnCoords, drawingCoord{x, from.y})
+<<<<<<< HEAD
 				safeSet(x, from.y, "-")
+=======
+				if stroke != strokeDotted || i%2 == 0 {
+					(*d)[x][from.y] = horizontal
+				}
+>>>>>>> upstream/master
 			}
 		case UpperLeft:
 			for x, y := from.x, from.y-offsetFrom; x >= to.x-offsetTo && y >= to.y-offsetTo; x, y = x-1, y-1 {

@@ -12,6 +12,7 @@ import (
 )
 
 type graphProperties struct {
+<<<<<<< HEAD
 	data              *orderedmap.OrderedMap[string, []textEdge]
 	nodeSpecs         map[string]graphNodeSpec
 	styleClasses      *map[string]styleClass
@@ -26,6 +27,18 @@ type graphProperties struct {
 	edgeLabelPolicy   string
 	edgeLabelMaxWidth int
 	maxNodesPerLevel  int
+=======
+	data             *orderedmap.OrderedMap[string, []textEdge]
+	nodeSpecs        map[string]graphNodeSpec
+	styleClasses     *map[string]styleClass
+	boxBorderPadding int
+	graphDirection   string
+	styleType        string
+	paddingX         int
+	paddingY         int
+	subgraphs        []*textSubgraph
+	useAscii         bool
+>>>>>>> upstream/master
 }
 
 type textNode struct {
@@ -36,15 +49,18 @@ type textNode struct {
 }
 
 type graphNodeSpec struct {
-	label            graphLabel
-	labelIsExplicit  bool
-	styleClass       string
+	label           graphLabel
+	labelIsExplicit bool
+	styleClass      string
 }
 
 type textEdge struct {
-	parent textNode
-	child  textNode
-	label  string
+	parent          textNode
+	child           textNode
+	label           string
+	isBidirectional bool
+	stroke          edgeStroke
+	head            edgeHead
 }
 
 type textSubgraph struct {
@@ -163,18 +179,26 @@ func parseStyleClass(matchedLine []string) styleClass {
 	return styleClass{className, styleMap}
 }
 
-func setArrowWithLabel(lhs, rhs []textNode, label string, gp *graphProperties) []textNode {
+func setArrowWithStyle(lhs, rhs []textNode, label string, isBidirectional bool, stroke edgeStroke, head edgeHead, gp *graphProperties) []textNode {
 	log.Debug("Setting arrow from ", lhs, " to ", rhs, " with label ", label)
 	for _, l := range lhs {
 		for _, r := range rhs {
-			setData(l, textEdge{l, r, label}, gp.data, gp.nodeSpecs)
+			setData(l, textEdge{l, r, label, isBidirectional, stroke, head}, gp.data, gp.nodeSpecs)
 		}
 	}
 	return rhs
 }
 
+func setArrowWithLabel(lhs, rhs []textNode, label string, isBidirectional bool, gp *graphProperties) []textNode {
+	return setArrowWithStyle(lhs, rhs, label, isBidirectional, strokeSolid, headArrow, gp)
+}
+
 func setArrow(lhs, rhs []textNode, gp *graphProperties) []textNode {
-	return setArrowWithLabel(lhs, rhs, "", gp)
+	return setArrowWithLabel(lhs, rhs, "", false, gp)
+}
+
+func setBidirectionalArrow(lhs, rhs []textNode, gp *graphProperties) []textNode {
+	return setArrowWithLabel(lhs, rhs, "", true, gp)
 }
 
 func rememberNode(node textNode, nodeSpecs map[string]graphNodeSpec) {
@@ -216,6 +240,31 @@ func setData(parent textNode, edge textEdge, data *orderedmap.OrderedMap[string,
 	}
 }
 
+// edgeArrowPattern matches the classic arrow (-->) plus the dotted, thick,
+// open, circle, and cross link operators Mermaid also supports (-.->, ==>,
+// ---, --o, --x). It's a capturing group so classifyArrowToken can tell them
+// apart afterwards.
+const edgeArrowPattern = `(-->|-\.->|==>|---|--o|--x)`
+
+// classifyArrowToken maps a flowchart link operator to the line style and
+// arrowhead it renders with.
+func classifyArrowToken(token string) (edgeStroke, edgeHead) {
+	switch token {
+	case "-.->":
+		return strokeDotted, headArrow
+	case "==>":
+		return strokeThick, headArrow
+	case "---":
+		return strokeSolid, headNone
+	case "--o":
+		return strokeSolid, headCircle
+	case "--x":
+		return strokeSolid, headCross
+	default: // "-->"
+		return strokeSolid, headArrow
+	}
+}
+
 func (gp *graphProperties) parseString(line string) ([]textNode, error) {
 	log.Debugf("Parsing line: %v", line)
 	var lhs, rhs []textNode
@@ -233,19 +282,7 @@ func (gp *graphProperties) parseString(line string) ([]textNode, error) {
 			},
 		},
 		{
-			regex: regexp.MustCompile(`(?s)^(.+)\s+-->\s+(.+)$`),
-			handler: func(match []string) ([]textNode, error) {
-				if lhs, err = gp.parseString(match[0]); err != nil {
-					lhs = []textNode{parseNode(match[0])}
-				}
-				if rhs, err = gp.parseString(match[1]); err != nil {
-					rhs = []textNode{parseNode(match[1])}
-				}
-				return setArrow(lhs, rhs, gp), nil
-			},
-		},
-		{
-			regex: regexp.MustCompile(`(?s)^(.+)\s+-->\|(.+)\|\s+(.+)$`),
+			regex: regexp.MustCompile(`(?s)^(.+)\s*<-->\s*\|(.+)\|\s*(.+)$`),
 			handler: func(match []string) ([]textNode, error) {
 				if lhs, err = gp.parseString(match[0]); err != nil {
 					lhs = []textNode{parseNode(match[0])}
@@ -253,7 +290,45 @@ func (gp *graphProperties) parseString(line string) ([]textNode, error) {
 				if rhs, err = gp.parseString(match[2]); err != nil {
 					rhs = []textNode{parseNode(match[2])}
 				}
-				return setArrowWithLabel(lhs, rhs, match[1], gp), nil
+				return setArrowWithLabel(lhs, rhs, match[1], true, gp), nil
+			},
+		},
+		{
+			regex: regexp.MustCompile(`(?s)^(.+)\s*<-->\s*(.+)$`),
+			handler: func(match []string) ([]textNode, error) {
+				if lhs, err = gp.parseString(match[0]); err != nil {
+					lhs = []textNode{parseNode(match[0])}
+				}
+				if rhs, err = gp.parseString(match[1]); err != nil {
+					rhs = []textNode{parseNode(match[1])}
+				}
+				return setBidirectionalArrow(lhs, rhs, gp), nil
+			},
+		},
+		{
+			regex: regexp.MustCompile(`(?s)^(.+)\s*` + edgeArrowPattern + `\s*\|(.+)\|\s*(.+)$`),
+			handler: func(match []string) ([]textNode, error) {
+				if lhs, err = gp.parseString(match[0]); err != nil {
+					lhs = []textNode{parseNode(match[0])}
+				}
+				if rhs, err = gp.parseString(match[3]); err != nil {
+					rhs = []textNode{parseNode(match[3])}
+				}
+				stroke, head := classifyArrowToken(match[1])
+				return setArrowWithStyle(lhs, rhs, match[2], false, stroke, head, gp), nil
+			},
+		},
+		{
+			regex: regexp.MustCompile(`(?s)^(.+)\s*` + edgeArrowPattern + `\s*(.+)$`),
+			handler: func(match []string) ([]textNode, error) {
+				if lhs, err = gp.parseString(match[0]); err != nil {
+					lhs = []textNode{parseNode(match[0])}
+				}
+				if rhs, err = gp.parseString(match[2]); err != nil {
+					rhs = []textNode{parseNode(match[2])}
+				}
+				stroke, head := classifyArrowToken(match[1])
+				return setArrowWithStyle(lhs, rhs, "", false, stroke, head, gp), nil
 			},
 		},
 		{
@@ -361,14 +436,33 @@ func mermaidFileToMap(mermaid, styleType string) (*graphProperties, error) {
 		return &properties, errors.New("missing graph definition")
 	}
 
-	// First line should either say "graph TD" or "graph LR"
-	switch lines[0] {
-	case "graph LR", "flowchart LR":
-		properties.graphDirection = "LR"
-	case "graph TD", "flowchart TD", "graph TB", "flowchart TB":
-		properties.graphDirection = "TD"
-	default:
-		return &properties, fmt.Errorf("unsupported graph type '%s'. Supported types: graph TD, graph TB, graph LR, flowchart TD, flowchart TB, flowchart LR", lines[0])
+	// The first line declares the diagram: "graph" or "flowchart" followed by an
+	// optional direction (e.g. "flowchart LR", "graph TD", or a bare "graph").
+	// strings.Fields collapses any surrounding or repeated whitespace, so
+	// indented or trailing-padded declarations parse correctly; TrimRight drops a
+	// trailing separator (mermaid allows "graph TD;").
+	fields := strings.Fields(strings.TrimRight(lines[0], "; \t\r"))
+	if len(fields) == 0 || (fields[0] != "graph" && fields[0] != "flowchart") {
+		return &properties, fmt.Errorf("unsupported graph type '%s'. Supported types: 'graph' or 'flowchart' with an optional direction (TD, TB, BT, LR, RL)", strings.TrimSpace(lines[0]))
+	}
+	if len(fields) > 2 {
+		return &properties, fmt.Errorf("unexpected tokens after graph direction: %q", strings.Join(fields[2:], " "))
+	}
+
+	// Mermaid defaults to top-down when no direction is given. The renderer only
+	// lays out along the horizontal (LR) or vertical (TD) axis; the reverse
+	// directions RL and BT are accepted but drawn on their axis without the
+	// reversal (RL renders left-to-right, BT top-down).
+	properties.graphDirection = "TD"
+	if len(fields) == 2 {
+		switch fields[1] {
+		case "LR", "RL":
+			properties.graphDirection = "LR"
+		case "TD", "TB", "BT":
+			properties.graphDirection = "TD"
+		default:
+			return &properties, fmt.Errorf("unsupported graph direction '%s'. Supported directions: TD, TB, BT, LR, RL", fields[1])
+		}
 	}
 	lines = lines[1:]
 
