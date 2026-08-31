@@ -7,14 +7,40 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// edgeStroke is the line style drawn along an edge's path. Only ASCII
+// output (g.useAscii) currently distinguishes them; Unicode output always
+// renders a solid line regardless of stroke.
+type edgeStroke int
+
+const (
+	strokeSolid edgeStroke = iota
+	strokeDotted
+	strokeThick
+)
+
+// edgeHead is the glyph drawn at an edge's arrowhead end. headNone means no
+// glyph is drawn at all (an open link like ---). Only ASCII output currently
+// distinguishes them; Unicode output always draws a directional arrowhead.
+type edgeHead int
+
+const (
+	headArrow edgeHead = iota
+	headCircle
+	headCross
+	headNone
+)
+
 type edge struct {
-	from      *node
-	to        *node
-	text      string
-	path      []gridCoord
-	labelLine []gridCoord
-	startDir  direction
-	endDir    direction
+	from            *node
+	to              *node
+	text            string
+	isBidirectional bool
+	stroke          edgeStroke
+	head            edgeHead
+	path            []gridCoord
+	labelLine       []gridCoord
+	startDir        direction
+	endDir          direction
 }
 
 func (g *graph) determinePath(e *edge) {
@@ -114,37 +140,76 @@ func (g *graph) determineLabelLine(e *edge) {
 	if lenLabel == 0 {
 		return
 	}
+	// Widening a column that is occupied by a node would push that node's
+	// border out, leaving a visible gap between the box and any incoming
+	// arrowhead. Prefer label-line candidates whose target column is a free
+	// edge corridor; only fall back to a node column if no corridor segment
+	// is available.
 	prevStep := e.path[0]
+	var largestLine []gridCoord
 	var largestLineSize int
-	// Init to first line if we find nothing else
-	largestLine := []gridCoord{prevStep, e.path[1]}
-	largestLineSize = 0
+	var fallbackLine []gridCoord
+	var fallbackLineSize int
 	for _, step := range e.path[1:] {
 		line := []gridCoord{gridCoord(prevStep), gridCoord(step)}
+		prevStep = step
 		lineWidth := g.calculateLineWidth(line)
+		if g.isNodeColumn(labelMiddleX(line)) {
+			if lineWidth > fallbackLineSize {
+				fallbackLineSize = lineWidth
+				fallbackLine = line
+			}
+			continue
+		}
 		if lineWidth >= lenLabel {
 			largestLine = line
 			break
-		} else if lineWidth > largestLineSize {
+		}
+		if lineWidth > largestLineSize {
 			largestLineSize = lineWidth
 			largestLine = line
 		}
-		prevStep = step
+	}
+	if largestLine == nil {
+		largestLine = fallbackLine
+	}
+	if largestLine == nil {
+		// Path only had a single segment that lives on a node column; use it
+		// rather than dropping the label entirely.
+		largestLine = []gridCoord{e.path[0], e.path[1]}
 	}
 
-	var maxX, minX int
-	if largestLine[0].x > largestLine[1].x {
-		maxX = largestLine[0].x
-		minX = largestLine[1].x
-	} else {
-		maxX = largestLine[1].x
-		minX = largestLine[0].x
+	middleX := labelMiddleX(largestLine)
+	labelPadding := 3 // Wrap with -{label}-> (dashes + end arrowhead, 3 char)
+	if e.isBidirectional {
+		labelPadding = 4 // Wrap with <-{label}-> (start arrowhead+ dashes + end arrowhead, 4 char)
 	}
-	middleX := minX + (maxX-minX)/2
-	log.Debugf("Increasing column width for column %v from size %v to %v", middleX, g.columnWidth[middleX], lenLabel+2)
-	g.columnWidth[middleX] = Max(g.columnWidth[middleX], lenLabel+2) // Wrap with dashes + arrowhead
+	log.Debugf("Increasing column width for column %v from size %v to %v", middleX, g.columnWidth[middleX], lenLabel+labelPadding)
+	g.columnWidth[middleX] = Max(g.columnWidth[middleX], lenLabel+labelPadding)
 	log.Debugf("New column sizes: %v", g.columnWidth)
 	e.labelLine = largestLine
+}
+
+func labelMiddleX(line []gridCoord) int {
+	minX, maxX := line[0].x, line[1].x
+	if minX > maxX {
+		minX, maxX = maxX, minX
+	}
+	return minX + (maxX-minX)/2
+}
+
+// isNodeColumn reports whether grid column x is occupied by any node.
+// Widening such a column distorts the box that owns it.
+func (g *graph) isNodeColumn(x int) bool {
+	for _, n := range g.nodes {
+		if n.gridCoord == nil {
+			continue
+		}
+		if x >= n.gridCoord.x && x <= n.gridCoord.x+2 {
+			return true
+		}
+	}
+	return false
 }
 
 func (g graph) calculateLineWidth(line []gridCoord) int {

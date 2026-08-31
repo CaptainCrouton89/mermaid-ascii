@@ -174,3 +174,86 @@ func TestMermaidFileToMapUsesLatestExplicitLabel(t *testing.T) {
 		t.Fatal("expected A label to remain explicit")
 	}
 }
+
+// Tests non-standard arrow operators.
+func TestMermaidFileToMapParsesNonStandardEdgeOperators(t *testing.T) {
+	for _, op := range []string{"-->", "-.->", "==>", "---", "--o", "--x"} {
+		t.Run(op, func(t *testing.T) {
+			properties, err := mermaidFileToMap("graph LR\nA "+op+" B", "cli")
+			if err != nil {
+				t.Fatalf("mermaidFileToMap() error = %v", err)
+			}
+			edges, ok := properties.data.Get("A")
+			if !ok || len(edges) != 1 || edges[0].child.name != "B" {
+				t.Fatalf("edges from A = %#v, want one edge to B", edges)
+			}
+		})
+	}
+}
+
+func TestMermaidFileToMapParsesChainedNonStandardEdges(t *testing.T) {
+	input := "graph LR\nA -.-> B\nB ==> C\nC --- D\nD --o E\nE --x F"
+	properties, err := mermaidFileToMap(input, "cli")
+	if err != nil {
+		t.Fatalf("mermaidFileToMap() error = %v", err)
+	}
+
+	for _, link := range [][2]string{{"A", "B"}, {"B", "C"}, {"C", "D"}, {"D", "E"}, {"E", "F"}} {
+		edges, ok := properties.data.Get(link[0])
+		if !ok || len(edges) != 1 || edges[0].child.name != link[1] {
+			t.Fatalf("edges from %q = %#v, want one edge to %q", link[0], edges, link[1])
+		}
+	}
+}
+
+// TestGraphTypeDetection verifies that the diagram declaration line is parsed
+// tolerantly: surrounding whitespace, a missing direction (defaults to
+// top-down), and the reverse directions RL/BT are all accepted.
+func TestGraphTypeDetection(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantDir string
+		wantErr bool
+	}{
+		{"plain graph TD", "graph TD\nA --> B", "TD", false},
+		{"flowchart LR", "flowchart LR\nA --> B", "LR", false},
+		{"leading whitespace", "    flowchart LR\n    A --> B", "LR", false},
+		{"trailing whitespace", "graph LR    \nA --> B", "LR", false},
+		{"indented graph TD", "        graph TD\n        A --> B", "TD", false},
+		{"bare graph defaults to TD", "graph\nA --> B", "TD", false},
+		{"bare flowchart defaults to TD", "flowchart\nA --> B", "TD", false},
+		{"TB maps to TD", "flowchart TB\nA --> B", "TD", false},
+		{"RL maps to LR axis", "graph RL\nA --> B", "LR", false},
+		{"BT maps to TD axis", "flowchart BT\nA --> B", "TD", false},
+		{"trailing semicolon bare", "graph;\nA --> B", "TD", false},
+		{"trailing semicolon with direction", "graph TD;\nA --> B", "TD", false},
+		{"flowchart LR semicolon", "flowchart LR;\nA --> B", "LR", false},
+		{"CRLF line ending", "graph TD\r\nA --> B", "TD", false},
+		{"tab separator", "graph\tLR\nA --> B", "LR", false},
+		{"lowercase direction errors", "graph td\nA --> B", "", true},
+		{"uppercase graph keyword errors", "GRAPH TD\nA --> B", "", true}, // flowchart stays case-sensitive (mermaid parity)
+		{"extra tokens error", "graph TD foo\nA --> B", "", true},
+		{"unknown type errors", "sequenceDiagram\nA->>B: x", "", true},
+		{"unknown direction errors", "graph SIDEWAYS\nA --> B", "", true},
+		{"empty input errors", "", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			props, err := mermaidFileToMap(tt.input, "cli")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got direction %q", props.graphDirection)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if props.graphDirection != tt.wantDir {
+				t.Errorf("direction = %q, want %q", props.graphDirection, tt.wantDir)
+			}
+		})
+	}
+}
