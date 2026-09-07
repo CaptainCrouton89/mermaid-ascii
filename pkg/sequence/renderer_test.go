@@ -26,18 +26,63 @@ func TestSequenceDiagramRendering(t *testing.T) {
 	// Test files - stored in sequence/ directory (Unicode expected output)
 	testFiles := []string{
 		"adjacent_participants_communication.txt",
+		"alt_basic.txt",
+		"alt_multiple_else.txt",
+		"par_basic.txt",
+		"critical_basic.txt",
+		"break_rect.txt",
+		"arrow_types.txt",
+		"note_over_spaced_names.txt",
+		"fragment_spaced_names.txt",
+		"self_message_spaced_name.txt",
+		"quoted_name_with_arrow.txt",
+		"central_spaced_names.txt",
+		"participant_names_spaces.txt",
+		"participant_names_dashes.txt",
+		"participant_names_alias_equals.txt",
+		"actor_alias.txt",
+		"actor_participant_mix.txt",
+		"box_basic.txt",
+		"box_multiple.txt",
+		"activation_shorthand.txt",
+		"activation_stacked.txt",
+		"activation_keywords.txt",
+		"create_destroy.txt",
+		"create_actor_alias.txt",
+		"central_connections.txt",
+		"central_connection_self.txt",
+		"cross_arrows.txt",
+		"async_point_arrows.txt",
+		"bidirectional_arrows.txt",
+		"self_arrow_variants.txt",
 		"autonumber.txt",
 		"bidirectional_messages.txt",
 		"dotted_arrows_only.txt",
 		"four_participants.txt",
+		"fragment_partial_span.txt",
 		"long_participant_names.txt",
+		"loop_autonumber.txt",
+		"loop_basic.txt",
+		"loop_empty.txt",
 		"messages_without_labels.txt",
 		"east_asian_characters.txt",
 		"multiword_labels.txt",
+		"note_over_single.txt",
+		"note_over_span.txt",
+		"note_in_loop.txt",
+		"opt_basic.txt",
+		"opt_no_label.txt",
 		"self_message.txt",
 		"simple_two_participants.txt",
 		"single_message.txt",
 		"three_participants.txt",
+		"east_asian_participants.txt",
+		"mixed_width_cjk.txt",
+		"cjk_matrix.txt",
+		"cjk_feature_matrix.txt",
+		"combining_marks_mixed_width.txt",
+		"leading_combining_marks.txt",
+		"literal_control_character.txt",
 	}
 
 	for _, testFile := range testFiles {
@@ -53,11 +98,44 @@ func TestSequenceDiagramRendering_ASCII(t *testing.T) {
 	testDataPath := filepath.Join(getTestDataPath(), "sequence-ascii")
 
 	goldenFiles := []string{
+		"alt_basic.txt",
+		"par_basic.txt",
+		"note_over_single.txt",
+		"arrow_types.txt",
+		"participant_names_alias_equals.txt",
+		"note_over_spaced_names.txt",
+		"fragment_spaced_names.txt",
+		"participant_names_spaces.txt",
+		"participant_names_dashes.txt",
+		"actor_alias.txt",
+		"actor_participant_mix.txt",
+		"box_basic.txt",
+		"box_multiple.txt",
+		"activation_shorthand.txt",
+		"activation_stacked.txt",
+		"activation_keywords.txt",
+		"create_destroy.txt",
+		"create_actor_alias.txt",
+		"central_connections.txt",
+		"central_connection_self.txt",
+		"cross_arrows.txt",
+		"async_point_arrows.txt",
+		"bidirectional_arrows.txt",
+		"self_arrow_variants.txt",
 		"autonumber.txt",
 		"dotted_arrows_only.txt",
+		"loop_basic.txt",
+		"loop_empty.txt",
+		"opt_basic.txt",
 		"self_message.txt",
 		"simple_two_participants.txt",
 		"three_participants.txt",
+		"east_asian_participants.txt",
+		"mixed_width_cjk.txt",
+		"cjk_matrix.txt",
+		"cjk_feature_matrix.txt",
+		"combining_marks_mixed_width.txt",
+		"leading_combining_marks.txt",
 	}
 
 	for _, testFile := range goldenFiles {
@@ -74,18 +152,48 @@ func TestSequenceDiagramRendering_ASCIISmokeTest(t *testing.T) {
 
 	testFiles := []string{
 		"adjacent_participants_communication.txt",
+		"alt_basic.txt",
+		"alt_multiple_else.txt",
+		"par_basic.txt",
+		"critical_basic.txt",
+		"break_rect.txt",
+		"arrow_types.txt",
+		"note_over_spaced_names.txt",
+		"fragment_spaced_names.txt",
+		"self_message_spaced_name.txt",
+		"quoted_name_with_arrow.txt",
+		"central_spaced_names.txt",
+		"participant_names_spaces.txt",
+		"participant_names_dashes.txt",
+		"participant_names_alias_equals.txt",
+		"central_connections.txt",
+		"central_connection_self.txt",
+		"cross_arrows.txt",
+		"async_point_arrows.txt",
+		"bidirectional_arrows.txt",
+		"self_arrow_variants.txt",
 		"autonumber.txt",
 		"bidirectional_messages.txt",
 		"dotted_arrows_only.txt",
 		"four_participants.txt",
+		"fragment_partial_span.txt",
 		"long_participant_names.txt",
+		"loop_autonumber.txt",
+		"loop_basic.txt",
+		"loop_empty.txt",
 		"messages_without_labels.txt",
 		"east_asian_characters.txt",
 		"multiword_labels.txt",
+		"note_over_single.txt",
+		"note_over_span.txt",
+		"note_in_loop.txt",
+		"opt_basic.txt",
+		"opt_no_label.txt",
 		"self_message.txt",
 		"simple_two_participants.txt",
 		"single_message.txt",
 		"three_participants.txt",
+		"east_asian_participants.txt",
 	}
 
 	for _, testFile := range testFiles {
@@ -149,12 +257,122 @@ func TestSequenceDiagramRendering_EastAsian(t *testing.T) {
 	testFiles := []string{
 		"simple_two_participants.txt",
 		"three_participants.txt",
+		"east_asian_participants.txt",
 		"four_participants.txt",
+		"leading_combining_marks.txt",
+		"literal_control_character.txt",
 	}
 
 	for _, testFile := range testFiles {
 		t.Run(testFile, func(t *testing.T) {
 			verifySequenceDiagramWithCharset(t, filepath.Join(testDataPath, testFile), false)
+		})
+	}
+}
+
+func TestPutTextLeadingCombiningMarkSkipsPadding(t *testing.T) {
+	line := []textCell{cellRune(' '), cellRune(' '), cellRune(' '), cellRune('|')}
+	putText(line, 2, "\u0301A")
+
+	if line[1] != cellRune(' ') {
+		t.Fatalf("leading mark attached to padding cell: %#v", line[1])
+	}
+	if line[2] != textualCell("\u0301A") {
+		t.Fatalf("text cell = %#v, want %#v", line[2], textualCell("\u0301A"))
+	}
+
+	line = []textCell{cellRune(' '), cellRune(' '), cellRune(' ')}
+	putText(line, 1, "\u0301")
+	if line[1] != cellRune(' ') {
+		t.Fatalf("leading mark mutated padding: %#v", line[1])
+	}
+}
+
+func TestPutTextKeepsLeadingMarksWithBase(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+		want []textCell
+	}{
+		{name: "ASCII base", text: "\u0301A", want: []textCell{cellRune(' '), textualCell("\u0301A")}},
+		{name: "wide base", text: "\u0301用́", want: []textCell{cellRune(' '), textualCell("\u0301用́"), continuationCell}},
+		{name: "format mark", text: "\u200bA", want: []textCell{cellRune(' '), textualCell("\u200bA")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			line := make([]textCell, 8)
+			for i := range line {
+				line[i] = cellRune(' ')
+			}
+			putText(line, 1, tc.text)
+			for i, want := range tc.want {
+				if line[i] != want {
+					t.Errorf("cell[%d] = %#v, want %#v", i, line[i], want)
+				}
+			}
+		})
+	}
+}
+
+func TestLiteralControlCharacterPreservedInRendererText(t *testing.T) {
+	control := "\x01"
+	if got := trimCells(textCells("left" + control + "right")); got != "left"+control+"right" {
+		t.Fatalf("literal control character lost from cell text: %q", got)
+	}
+
+	a := &Participant{ID: "a", Label: "A" + control + "ctor", Index: 0}
+	b := &Participant{ID: "b", Label: "B", Index: 1}
+	sd := &SequenceDiagram{
+		Participants: []*Participant{a, b},
+		Boxes:        []*Box{{Title: "box" + control + "title", First: 0, Last: 1}},
+		Events: []Event{
+			{Kind: EventFragmentStart, Fragment: &Fragment{Type: FragmentLoop, Label: "fragment" + control + "label"}},
+			{Kind: EventMessage, Message: &Message{From: a, To: b, Label: "send" + control + "message", ArrowType: SolidArrow}},
+			{Kind: EventFragmentEnd},
+			{Kind: EventNote, Note: &Note{Placement: NoteOver, Participants: []*Participant{a}, Text: "note" + control + "text"}},
+		},
+	}
+	for _, useASCII := range []bool{false, true} {
+		config := diagram.NewTestConfig(useASCII, "cli")
+		got, err := Render(sd, config)
+		if err != nil {
+			t.Fatalf("Render(useASCII=%t): %v", useASCII, err)
+		}
+		for _, want := range []string{"A" + control + "ctor", "send" + control + "message", "note" + control + "text", "box" + control + "title", "fragment" + control + "label"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("Render(useASCII=%t) missing literal control text %q in %q", useASCII, want, got)
+			}
+		}
+	}
+}
+
+func TestTextCellsAttachCombiningMarks(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+		cells []textCell
+	}{
+		{name: "ASCII base", input: "é", cells: []textCell{textualCell("é")}},
+		{name: "leading combining mark", input: "\u0301A", cells: []textCell{textualCell("\u0301A")}},
+		{name: "mark after padding", input: "  \u0301A", cells: []textCell{cellRune(' '), cellRune(' '), textualCell("\u0301A")}},
+		{name: "zero-width format", input: "A\u200bB", cells: []textCell{textualCell("A\u200b"), textualCell("B")}},
+		{name: "mark after border", input: "| \u0301A", cells: []textCell{cellRune('|'), cellRune(' '), textualCell("\u0301A")}},
+		{name: "leading mark before border", input: "\u0301| A", cells: []textCell{cellRune('|'), cellRune(' '), textualCell("\u0301A")}},
+		{name: "CJK base", input: "用́", cells: []textCell{textualCell("用́"), continuationCell}},
+		{name: "mixed text", input: "A用́B", cells: []textCell{textualCell("A"), textualCell("用́"), continuationCell, textualCell("B")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := textCells(tc.input)
+			if len(got) != len(tc.cells) {
+				t.Fatalf("textCells(%q) has %d cells, want %d: %#v", tc.input, len(got), len(tc.cells), got)
+			}
+			for i := range tc.cells {
+				if got[i] != tc.cells[i] {
+					t.Errorf("textCells(%q)[%d] = %#v, want %#v", tc.input, i, got[i], tc.cells[i])
+				}
+			}
+			if displayWidth(tc.input) != len(got) {
+				t.Errorf("displayWidth(%q) = %d, want cell count %d", tc.input, displayWidth(tc.input), len(got))
+			}
 		})
 	}
 }
