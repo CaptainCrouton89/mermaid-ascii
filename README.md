@@ -162,6 +162,55 @@ $ mermaid-ascii -f ./test.mermaid
 │         │          
 └─────────┘          
 
+# Other edge types
+Besides the default `-->` arrow, flowchart edges also accept `-.->` (dotted), `==>` (thick), `---` (open, no arrowhead), `--o` (circle head), and `--x` (cross head):
+$ cat test.mermaid
+graph TD
+A -.-> B
+A ==> C
+B --- C
+B --o|example| D
+D --x C
+$ mermaid-ascii -f ./test.mermaid
+┌──────────┐          
+│          │          
+│    A     │━━━━━━━┓  
+│          │       ┃  
+└─────┬────┘       ┃  
+      ┆            ┃  
+      ┆            ┃  
+      ┆            ┃  
+      ┆            ┃  
+      ▼            ▼  
+┌──────────┐     ┌───┐
+│          │     │   │
+│    B     ├─────┤ C │
+│          │     │   │
+└─────┬────┘     └───┘
+      │            ✕  
+      │            │  
+   example         │  
+      │            │  
+      ●            │  
+┌──────────┐       │  
+│          │       │  
+│    D     ├───────┘  
+│          │          
+└──────────┘          
+
+# Limit graph output to terminal columns
+$ mermaid-ascii --file test.mermaid --max-width 30
+# Use the detected width when stdout is an interactive terminal
+$ mermaid-ascii --file test.mermaid --max-width auto
+
+`--max-width` accepts a positive terminal-column number or `auto`. `auto`
+detects stdout's terminal width and requires an interactive terminal; invalid
+and non-positive values are rejected. If a graph exceeds the limit, rendering
+retries with compact spacing (`paddingX=1` and `paddingY=1`). Content is never
+wrapped, truncated, cropped, or removed. The CLI notes when compact spacing
+fits and warns when it does not. The flag affects only graph and flowchart
+diagrams.
+
 # Read from stdin
 $ cat test.mermaid | mermaid-ascii
 ┌───┐     ┌───┐     ┌───┐
@@ -326,6 +375,32 @@ $ mermaid-ascii -f sequence.mermaid
     │◄┈┈┈┈┈┈┈┈┈┈┈┤
     │            │
 
+# Loop and opt blocks are drawn as labelled frames (and can be nested)
+$ cat sequence.mermaid
+sequenceDiagram
+Alice->>Bob: Hello
+loop every minute
+Alice->>Bob: Ping
+Bob-->>Alice: Pong
+end
+$ mermaid-ascii -f sequence.mermaid
+┌───────┐     ┌─────┐
+│ Alice │     │ Bob │
+└───┬───┘     └──┬──┘
+    │            │
+    │ Hello      │
+    ├───────────►│
+  ┌─[loop every minute]─┐
+  │ │            │      │
+  │ │ Ping       │      │
+  │ ├───────────►│      │
+  │ │            │      │
+  │ │ Pong       │      │
+  │ │◄┈┈┈┈┈┈┈┈┈┈┈┤      │
+  │ │            │      │
+  └─────────────────────┘
+    │            │
+
 # ASCII mode for sequence diagrams
 $ cat sequence.mermaid | mermaid-ascii --ascii
 +-------+     +-----+
@@ -340,6 +415,55 @@ $ cat sequence.mermaid | mermaid-ascii --ascii
     |            |
 
 ```
+
+### Entity Relationship Diagrams
+
+Entity relationship diagrams render entities as tables and relationships as crow's-foot connectors, with each relationship label on its own line so they never collide.
+
+```bash
+# Relationships with cardinality and labels
+$ cat er.mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    CUSTOMER }|..|{ DELIVERY_ADDRESS : uses
+$ mermaid-ascii -f er.mermaid
+┌──────────┐                 ┌───────┐
+│ CUSTOMER │                 │ ORDER │
+└───┬───┬──┘                 └──┬───┬┘
+    └||─┼──────places─────────o{┘   │
+       ┌}|────────contains────────||┘
+       │└}|┈┈┈┈┈┈┈┈┈┈┈uses┈┈┈┈┈┈┈┈┈┈┈|{┐
+┌──────┴────┐                ┌─────────┴────────┐
+│ LINE_ITEM │                │ DELIVERY_ADDRESS │
+└───────────┘                └──────────────────┘
+
+# Entities with typed attributes, keys and comments
+$ cat er.mermaid
+erDiagram
+    CUSTOMER {
+        string name PK
+        string email
+        int loyaltyPoints
+    }
+    ORDER {
+        int id PK
+        decimal(10,2) total
+    }
+    CUSTOMER ||--o{ ORDER : places
+$ mermaid-ascii -f er.mermaid
+┌─────────────────────────────┐            ┌────────────────────────────┐
+│          CUSTOMER           │            │           ORDER            │
+├────────┬───────────────┬────┤            ├───────────────┬───────┬────┤
+│ string │ name          │ PK │            │ int           │ id    │ PK │
+│ string │ email         │    │            │ decimal(10,2) │ total │    │
+│ int    │ loyaltyPoints │    │            └──────────────┬┴───────┴────┘
+└────────┴──────┬────────┴────┘                           │
+                └||───────────────places────────────────o{┘
+
+```
+
+Identifying relationships (`--`) are drawn solid, non-identifying ones (`..`) dashed. All crow's-foot cardinalities are supported (`||`, `|o`, `}o`, `}|` on either side), as well as the numeric (`1`, `0+`, `1+`) and word (`only one`, `zero or more`, …) forms.
 
 ```bash
 $ mermaid-ascii --help
@@ -356,6 +480,7 @@ Available Commands:
 
 Flags:
   -p, --borderPadding int   Padding between text and border (default 1)
+      --max-width string    Maximum graph width in terminal columns (positive number or auto)
   -c, --coords              Show coordinates
   -f, --file string         Mermaid file to parse
   -h, --help                help for mermaid-ascii
@@ -513,21 +638,39 @@ Note that with `--coords` enabled, the grid-coords shown show the starting locat
 - [x] `A & B` syntax
 - [x] `classDef` and `class` for colored output
 - [x] Prevent arrows overlapping nodes
-- [ ] `subgraph` support
+- [x] `subgraph` layout, including edge-less declared members in distinct frames
 - [ ] Shapes other than rectangles
 - [ ] Diagonal arrows
 
 ### Sequence Diagrams ✅
 - [x] Basic message syntax (`A->>B: message`)
-- [x] Solid arrows (`->>`) and dotted arrows (`-->>`)
+- [x] Solid and dotted arrows, with or without an arrowhead (`->>`, `-->>`, `->`, `-->`)
+- [x] Cross (`-x`, `--x`), async point (`-)`, `--)`) and bidirectional (`<<->>`, `<<-->>`) arrows
+- [x] Central connections (`A ()->>() B`) on any arrow type
+- [x] Participant names with spaces, dashes and equals (`cron job->>customer-notifier`)
 - [x] Self-messages (`A->>A: think`)
 - [x] Participant declarations (`participant Alice`)
 - [x] Participant aliases (`participant A as Alice`)
 - [x] Unicode support (emojis, CJK characters, etc.)
 - [x] Both ASCII and Unicode rendering modes
+- [x] `loop` and `opt` blocks (incl. nesting)
+- [x] `autonumber`
+- [x] Notes (`Note over A`, `Note over A,B`, `Note left of A`, `Note right of A`)
 - [ ] Activation boxes
-- [ ] Notes (`Note left of Alice: text`)
-- [ ] Loops, alt, opt blocks
+- [x] `alt`/`else` blocks (incl. multiple else, nesting)
+- [x] `par`/`and`, `critical`/`option`, `break`, `rect` blocks
+
+### Entity Relationship Diagrams ✅
+- [x] Relationships with all crow's-foot cardinalities (`||--o{`, `}|..|{`, …)
+- [x] Numeric (`1`, `0+`, `1+`) and word (`one or more`, `zero or one`, …) cardinalities
+- [x] Identifying (solid) and non-identifying (dashed) relationships
+- [x] Relationship labels, collision-free (one routing lane per relationship)
+- [x] Entity attribute tables: type, name, keys (PK/FK/UK) and comments
+- [x] Entity aliases (`CUSTOMER c {`, `CUSTOMER["Customer"]`)
+- [x] Self-relationships (`EMPLOYEE ||--o{ EMPLOYEE : manages`)
+- [x] Both ASCII and Unicode rendering modes
+- [ ] `MD_PARENT` (`u--`) cardinality
+- [ ] `style` / `classDef` styling directives (parsed and ignored)
 
 ## TODOs
 
@@ -540,7 +683,7 @@ The baseline components for Mermaid work, but there are a lot of things that are
 - [x] `classDef` and `class`
 - [x] `A & B`
 - [x] Multiple arrows on one line (like `A --> B --> C`)
-- [ ] `subgraph`
+- [x] `subgraph` layout, including edge-less declared members in distinct frames
 - [ ] Shapes other than rectangles
 - [ ] Whitespacing and comments
 
@@ -549,13 +692,15 @@ The baseline components for Mermaid work, but there are a lot of things that are
 - [x] Prevent arrows overlapping nodes
 - [ ] Diagonal arrows
 - [ ] Place nodes in a more compact way
-- [ ] Prevent rendering more than X characters wide (like default 80 for terminal width)
+- [x] Limit graph output to terminal width with `--max-width`
 
 ### Sequence Diagram Improvements
 
 - [ ] Activation boxes (activate/deactivate)
-- [ ] Notes (`Note left of Alice: text`)
-- [ ] Loops, alt, opt, and par blocks
+- [x] Notes (`Note over`/`left of`/`right of`)
+- [x] `loop` and `opt` blocks
+- [x] `alt`/`else` blocks
+- [x] `par`, `critical`, `break`, and `rect` blocks
 
 ### General
 
